@@ -16,7 +16,12 @@ const PUBLIC_SLOTS = 16;
 const MAX_PUBLIC_SLOT_NETWORK_RETRIES = 5;
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const makeCode = () => Array.from({ length: 5 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');
-const FALLBACK_STUN_SERVERS = [];
+// Used only if the same-origin ICE configuration endpoint cannot be reached.
+const FALLBACK_STUN_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+];
 const PEER_OPTS = { debug: 0, config: { iceServers: FALLBACK_STUN_SERVERS } };
 const JOIN_TIMEOUT = 14000, QUICK_TIMEOUT = 11000, SIGNAL_TIMEOUT = 12000;
 const TURN_URL_PRIORITY = [
@@ -141,7 +146,7 @@ export class Net {
     if (code) { this.code = String(code).toUpperCase(); this.peer = await this._newPeer(PREFIX + this.code); }
     else if (isPublic) {
       let networkRetries = 0;
-      for (let slot = 0; slot < PUBLIC_SLOTS; slot++) {
+      for (let slot = 0; slot < PUBLIC_SLOTS;) {
         const slotCode = 'PUB' + slot;
         try {
           this.peer = await this._newPeer(PREFIX + slotCode); this.code = slotCode;
@@ -149,9 +154,9 @@ export class Net {
         } catch (e) {
           const occupied = !!(e && e.type === 'unavailable-id');
           const retryNetwork = !!(e && e.type === 'network' && networkRetries < MAX_PUBLIC_SLOT_NETWORK_RETRIES);
-          if (retryNetwork) networkRetries++;
-          const retry = occupied || retryNetwork;
-          if (!retry) throw e;
+          if (occupied) { slot++; continue; }
+          if (retryNetwork) { networkRetries++; continue; }
+          throw e;
         }
       }
       if (!this.peer) throw new Error('all public lobbies are busy - host a private one');
