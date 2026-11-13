@@ -2,7 +2,8 @@
 set -euo pipefail
 
 message_file=$1
-if ! grep -Eq '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._-]+\))?!?: .+' "$message_file"; then
+subject=$(head -n 1 "$message_file")
+if ! printf '%s\n' "$subject" | grep -Eq '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._-]+\))?!?: .+'; then
   cat >&2 <<'EOF'
 Commit message must follow Conventional Commits:
 
