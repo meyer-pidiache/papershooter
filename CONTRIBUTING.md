@@ -73,9 +73,12 @@ Enable the checked-in hooks once per clone:
     git config core.hooksPath .githooks
 
 The hooks enforce Conventional Commit messages and run npm run check before commits and pushes.
-The CI workflow checks JavaScript module syntax and Docker Compose configuration on pull requests
-and pushes to main. The project does not yet have an automated gameplay test suite, so visual
-changes also need browser review.
+CI validates pull request titles, JavaScript module syntax, and Docker Compose configuration.
+SonarCloud analyzes pushes to `main` and pull requests from branches in this repository; configure
+a GitHub Actions repository secret named `SONAR_TOKEN` with a SonarCloud token. Pull requests from
+external forks skip SonarCloud analysis because GitHub does not expose repository secrets to them.
+The project does not yet have an automated gameplay test suite, so visual changes also need browser
+review.
 
 ## Commits
 
