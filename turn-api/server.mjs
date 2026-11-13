@@ -56,11 +56,22 @@ const server = http.createServer(async (req, res) => {
   if (!withinRateLimit(clientIp(req))) return sendJson(res, 429, { error: 'rate_limited' });
   if (!turnKeyId || !turnApiToken) return sendJson(res, 503, { error: 'turn_not_configured' });
 
+  const controller = new AbortController();
+  let clientDisconnected = false;
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const abortOnClientClose = () => {
+    if (res.writableEnded) return;
+    clientDisconnected = true;
+    controller.abort();
+  };
+  res.once('close', abortOnClientClose);
+
   try {
     const response = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(turnKeyId)}/credentials/generate-ice-servers`, {
       method: 'POST',
       headers: { authorization: `Bearer ${turnApiToken}`, 'content-type': 'application/json' },
       body: JSON.stringify({ ttl }),
+      signal: controller.signal,
     });
     if (!response.ok) {
       console.error(`Cloudflare TURN credential request failed with HTTP ${response.status}`);
@@ -73,8 +84,12 @@ const server = http.createServer(async (req, res) => {
     }
     return sendJson(res, 200, { iceServers: data.iceServers, expiresAt: Date.now() + ttl * 1000 });
   } catch (err) {
+    if (clientDisconnected || res.destroyed) return;
     console.error(`Cloudflare TURN credential request failed: ${err && err.name || 'unknown error'}`);
     return sendJson(res, 502, { error: 'turn_credentials_unavailable' });
+  } finally {
+    clearTimeout(timeout);
+    res.off('close', abortOnClientClose);
   }
 });
 
