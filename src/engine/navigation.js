@@ -181,6 +181,7 @@ export class NavGrid {
     return best >= 0 ? best : bestAny;
   }
   // A* between two world positions; returns array of Vector3 or null
+  /** @returns {(THREE.Vector3[] & { complete: boolean }) | null} */
   findPath(from, to, maxExpand = 40000) {
     const start = this.nearestNode(from, 3, 3),
       goal = this.nearestNode(to, 4, 8);

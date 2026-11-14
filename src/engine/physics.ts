@@ -2,12 +2,48 @@
 import * as THREE from 'three';
 
 const EPS = 1e-4;
-const AX = ['x', 'y', 'z'];
+const AX = ['x', 'y', 'z'] as const;
 const _min = new THREE.Vector3(),
   _max = new THREE.Vector3(),
-  _out = [];
+  _out: Collider[] = [];
 
+export interface ColliderData {
+  noNav?: boolean;
+  noShoot?: boolean;
+  noGrapple?: boolean;
+  tag?: string;
+  breakable?: { id: number };
+}
+export interface Collider {
+  min: THREE.Vector3Like;
+  max: THREE.Vector3Like;
+  data: ColliderData;
+  id: number;
+  _q: number;
+}
+export interface Body {
+  pos: THREE.Vector3;
+  vel: THREE.Vector3;
+  halfW: number;
+  height: number;
+  stepHeight: number;
+  onGround: boolean;
+  hitWall: boolean;
+  hitCeiling: boolean;
+  wallNormal: THREE.Vector3;
+  landVel: number;
+  noSnap: boolean;
+  alwaysStep: boolean;
+  _bx: number;
+  _bz: number;
+}
 export class World {
+  boxes: Collider[];
+  cell: number;
+  grid: Map<number, Collider[]>;
+  _qid: number;
+  bounds: { min: THREE.Vector3; max: THREE.Vector3 };
+
   constructor(cell = 8) {
     this.boxes = [];
     this.cell = cell;
@@ -21,7 +57,7 @@ export class World {
     this.grid.clear();
     this._qid = 0;
   }
-  addBox(min, max, data = {}) {
+  addBox(min: THREE.Vector3Like, max: THREE.Vector3Like, data: ColliderData = {}) {
     const b = {
       min: { x: min.x, y: min.y, z: min.z },
       max: { x: max.x, y: max.y, z: max.z },
@@ -36,16 +72,16 @@ export class World {
     this.grid.clear();
     for (const b of this.boxes) this._insert(b);
   }
-  removeBox(b) {
+  removeBox(b: Collider) {
     const i = this.boxes.indexOf(b);
     if (i < 0) return;
     this.boxes.splice(i, 1);
     this.finalize();
   }
-  _key(ix, iz) {
+  _key(ix: number, iz: number) {
     return (ix + 4096) * 8192 + (iz + 4096);
   }
-  _insert(b) {
+  _insert(b: Collider) {
     const c = this.cell;
     const x0 = Math.floor(b.min.x / c),
       x1 = Math.floor(b.max.x / c),
@@ -63,7 +99,7 @@ export class World {
       }
   }
   // Boxes overlapping the AABB [min,max]
-  query(min, max, out = []) {
+  query(min: THREE.Vector3Like, max: THREE.Vector3Like, out: Collider[] = []) {
     out.length = 0;
     const c = this.cell;
     const q = ++this._qid;
@@ -92,23 +128,23 @@ export class World {
       }
     return out;
   }
-  overlapsAABB(min, max) {
+  overlapsAABB(min: THREE.Vector3Like, max: THREE.Vector3Like) {
     return this.query(min, max, _out).length > 0;
   }
 
-  _bodyBox(body, min, max) {
+  _bodyBox(body: Body, min: THREE.Vector3, max: THREE.Vector3) {
     const p = body.pos,
       hw = body.halfW;
     min.set(p.x - hw + EPS, p.y + EPS, p.z - hw + EPS);
     max.set(p.x + hw - EPS, p.y + body.height - EPS, p.z + hw - EPS);
   }
-  overlapsBody(body) {
+  overlapsBody(body: Body) {
     this._bodyBox(body, _min, _max);
     return this.query(_min, _max, _out).length > 0;
   }
 
   // Push the body out of any overlapping boxes along one axis. Returns sign of the push (0 = none).
-  _resolveAxis(body, axis, move) {
+  _resolveAxis(body: Body, axis: 0 | 1 | 2, move: number) {
     const ax = AX[axis];
     const p = body.pos;
     let pushed = 0;
@@ -136,7 +172,7 @@ export class World {
     return pushed;
   }
 
-  _moveHoriz(body, dx, dz, canStep) {
+  _moveHoriz(body: Body, dx: number, dz: number, canStep: boolean) {
     const p = body.pos;
     const ox = p.x,
       oz = p.z,
@@ -190,7 +226,7 @@ export class World {
   }
 
   // Integrate movement for a body {pos, vel, halfW, height, stepHeight, onGround, ...}; sub-steps fast bodies so they never tunnel.
-  moveBody(body, dt) {
+  moveBody(body: Body, dt: number) {
     const sp = body.vel.length();
     const maxStep = Math.max(0.2, body.halfW * 0.8);
     const n = Math.min(10, Math.max(1, Math.ceil((sp * dt) / maxStep)));
@@ -218,7 +254,7 @@ export class World {
     body.hitCeiling = hitCeiling;
     body.landVel = landVel;
   }
-  _moveBodyStep(body, dt) {
+  _moveBodyStep(body: Body, dt: number) {
     const p = body.pos,
       v = body.vel;
     body.hitWall = false;
@@ -253,9 +289,13 @@ export class World {
   }
 
   // Ray vs all boxes (slab test). Returns {dist, point, normal, box} or null.
-  /** @param {null | ((box: any) => boolean)} ignore */
-  raycast(o, d, maxDist = 1000, ignore = null) {
-    let best = null,
+  raycast(
+    o: THREE.Vector3Like,
+    d: THREE.Vector3Like,
+    maxDist = 1000,
+    ignore: null | ((box: Collider) => boolean) = null,
+  ) {
+    let best: Collider | null = null,
       bestT = maxDist,
       bAxis = -1,
       bSign = 0;
@@ -315,11 +355,15 @@ export class World {
     return { dist: bestT, point, normal, box: best };
   }
   // Highest walkable surface below a point
-  groundBelow(x, y, z, maxDrop = 100) {
+  groundBelow(x: number, y: number, z: number, maxDrop = 100) {
     const hit = this.raycast({ x, y, z }, { x: 0, y: -1, z: 0 }, maxDrop);
     return hit ? hit.point.y : y - maxDrop;
   }
-  hasLineOfSight(a, b, ignore = null) {
+  hasLineOfSight(
+    a: THREE.Vector3Like,
+    b: THREE.Vector3Like,
+    ignore: null | ((box: Collider) => boolean) = null,
+  ) {
     const d = new THREE.Vector3().subVectors(b, a);
     const len = d.length();
     if (len < 1e-4) return true;
@@ -328,9 +372,14 @@ export class World {
   }
 }
 
-export const SEE_THROUGH = (b) => b.data.noShoot === true;
+export const SEE_THROUGH = (b: Collider) => b.data.noShoot === true;
 
-export function makeBody(pos, halfW, height, stepHeight = 0.55) {
+export function makeBody(
+  pos: THREE.Vector3,
+  halfW: number,
+  height: number,
+  stepHeight = 0.55,
+): Body {
   return {
     pos: pos.clone(),
     vel: new THREE.Vector3(),

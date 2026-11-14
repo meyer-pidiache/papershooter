@@ -6,7 +6,7 @@ export const LEVELS = [
 export type MapKey = (typeof LEVELS)[number]['key'];
 
 export function knownMap(value: unknown): MapKey {
-  return value === 'mexico' ? value : 'district';
+  return LEVELS.find((map) => map.key === value)?.key ?? LEVELS[0].key;
 }
 
 export function mapName(value: unknown): string {

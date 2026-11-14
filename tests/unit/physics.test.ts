@@ -1,3 +1,4 @@
+import type { Collider } from '../../src/engine/physics.js';
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { makeBody, SEE_THROUGH, World } from '../../src/engine/physics.js';
@@ -14,10 +15,10 @@ function floorWorld() {
 describe('collision world', () => {
   it('deduplicates spatial queries and removes/clears colliders', () => {
     const world = floorWorld();
-    const queries: unknown[] = [];
+    const queries: Collider[] = [];
     expect(world.query(vector(-2, -2, -2), vector(2, 1, 2), queries)).toHaveLength(1);
     expect(world.overlapsAABB(vector(20, 0, 20), vector(21, 1, 21))).toBe(false);
-    world.removeBox({});
+    world.removeBox(new World().addBox(vector(), vector(1, 1, 1)));
     const box = world.boxes[0];
     world.removeBox(box);
     expect(world.boxes).toHaveLength(0);
@@ -37,7 +38,7 @@ describe('collision world', () => {
     expect(world.hasLineOfSight(vector(), vector())).toBe(true);
     expect(world.hasLineOfSight(vector(0, 2), vector(2, 2))).toBe(true);
     expect(world.hasLineOfSight(vector(0, 2), vector(0, -2))).toBe(false);
-    expect(SEE_THROUGH({ data: { noShoot: true } })).toBe(true);
+    expect(SEE_THROUGH(world.addBox(vector(), vector(1, 1, 1), { noShoot: true }))).toBe(true);
   });
 
   it('lands a falling body and stops at walls and ceilings', () => {
