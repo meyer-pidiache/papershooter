@@ -1,3 +1,4 @@
+import { nearestRayTarget, shotDamage } from '../../domain/ballistics.js';
 import { GunMechanics } from './gun-mechanics.js';
 import { GunAnimation } from '../../presentation/weapons/gun-animation.js';
 import { ShellEjection } from '../../presentation/weapons/shell-ejection.js';
@@ -5,7 +6,7 @@ import * as THREE from 'three';
 import { makeInkMaterial } from '../../presentation/ink/materials.js';
 import { INK } from '../../shared/ink.js';
 import { SEE_THROUGH } from '../../engine/physics.js';
-import { rand, clamp } from '../../engine/math.js';
+import { rand } from '../../engine/math.js';
 import { ViewModel } from '../../presentation/viewmodel.js';
 import { GUNS } from '../../domain/weapons.js';
 import {
@@ -97,7 +98,7 @@ export class Gun extends ViewModel {
     state.bloom(dt, frame);
     const pump = state.advancePump(dt);
     if (pump) this.animation.pump(pump);
-    if (state.reloading && this.advanceReload(dt)) return;
+    if (state.reloading && this._advanceReload(dt)) return;
     if (state.wantsReload(frame)) {
       this.startReload();
       return;
@@ -113,7 +114,7 @@ export class Gun extends ViewModel {
       this.fire(frame);
     }
   }
-  advanceReload(dt) {
+  _advanceReload(dt) {
     const progress = this.mechanics.advanceReload(dt);
     if (this.reloadType === 'mag') {
       this.animation.magazine(progress);
@@ -173,64 +174,67 @@ export class Gun extends ViewModel {
   }
   fireRay(origin, dir) {
     const ctx = this.ctx;
-    const hitE = ctx.enemies.raycast(origin, dir, 300),
-      hitW = ctx.world.raycast(origin, dir, 300, SEE_THROUGH);
+    const enemy = ctx.enemies.raycast(origin, dir, 300),
+      world = ctx.world.raycast(origin, dir, 300, SEE_THROUGH);
+    const player = ctx.raycastPlayers ? ctx.raycastPlayers(origin, dir, 300) : null;
+    const target = nearestRayTarget(enemy, world, player);
     let end,
       hit = false;
-    // other players in a versus match are targets too; the closest thing along the ray wins
-    const hitP = ctx.raycastPlayers ? ctx.raycastPlayers(origin, dir, 300) : null;
-    if (hitP && (!hitE || hitP.dist < hitE.dist) && (!hitW || hitP.dist < hitW.dist)) {
-      end = hitP.point;
-      const crit = hitP.part === 'head';
-      const pv = this.pvp || [this.damage, this.headMul, this.falloff];
-      let d = pv[0] * (crit ? pv[1] : 1);
-      if (pv[2]) d *= clamp(1 - (hitP.dist - pv[2][0]) / (pv[2][1] - pv[2][0]), pv[2][2], 1);
-      ctx.hitPlayer(hitP.player, d, {
-        point: hitP.point,
-        dir,
-        part: hitP.part,
-        source: this.kind,
-        crit,
-        dist: hitP.dist,
-      });
+    if (target === 'player') {
+      end = player.point;
+      this._damagePlayer(player, dir);
       hit = true;
-    } else if (
-      hitW &&
-      hitW.box &&
-      hitW.box.data.breakable &&
-      (!hitE || hitW.dist < hitE.dist) &&
-      ctx.breakHit
-    ) {
-      end = hitW.point;
-      ctx.breakHit(hitW.box.data.breakable, this.damage, hitW.point, dir);
+    } else if (target === 'enemy') {
+      end = enemy.point;
+      this._damageEnemy(enemy, dir);
       hit = true;
-    } else if (hitE && (!hitW || hitE.dist < hitW.dist)) {
-      end = hitE.point;
-      const crit = hitE.part === 'head';
-      let d = this.damage * (crit ? this.headMul : 1);
-      if (this.falloff)
-        d *= clamp(
-          1 - (hitE.dist - this.falloff[0]) / (this.falloff[1] - this.falloff[0]),
-          this.falloff[2],
-          1,
-        );
-      ctx.enemies.damage(hitE.enemy, d, {
-        point: hitE.point,
-        dir,
-        part: hitE.part,
-        source: this.kind,
-        crit,
-      });
-      hit = true;
-    } else if (hitW) {
-      end = hitW.point;
-      ctx.effects.bulletImpact(hitW.point, hitW.normal, INK.BLUE);
-      if (Math.random() < 0.25) this.ctx.audio.ricochet(hitW.point);
+    } else if (target === 'world') {
+      end = world.point;
+      hit = this._impactWorld(world, enemy, dir);
     } else end = origin.clone().addScaledVector(dir, 300);
     this.model.muzzle.getWorldPosition(_v);
     ctx.effects.tracer(_v, end, INK.BLUE, this.tracer, 0.05);
     if (ctx.onShot) ctx.onShot(end);
     return hit;
+  }
+  _damagePlayer(hit, direction) {
+    const critical = hit.part === 'head',
+      spec = this.pvp || [this.damage, this.headMul, this.falloff];
+    const damage = shotDamage(spec[0], spec[1], spec[2], hit.dist, critical);
+    this.ctx.hitPlayer(hit.player, damage, {
+      point: hit.point,
+      dir: direction,
+      part: hit.part,
+      source: this.kind,
+      crit: critical,
+      dist: hit.dist,
+    });
+  }
+  _damageEnemy(hit, direction) {
+    const critical = hit.part === 'head',
+      damage = shotDamage(this.damage, this.headMul, this.falloff, hit.dist, critical);
+    this.ctx.enemies.damage(hit.enemy, damage, {
+      point: hit.point,
+      dir: direction,
+      part: hit.part,
+      source: this.kind,
+      crit: critical,
+    });
+  }
+  _impactWorld(hit, enemy, direction) {
+    // A world/enemy tie draws the wall impact but does not break a prop at that same distance.
+    if (
+      hit.box &&
+      hit.box.data.breakable &&
+      (!enemy || hit.dist < enemy.dist) &&
+      this.ctx.breakHit
+    ) {
+      this.ctx.breakHit(hit.box.data.breakable, this.damage, hit.point, direction);
+      return true;
+    }
+    this.ctx.effects.bulletImpact(hit.point, hit.normal, INK.BLUE);
+    if (Math.random() < 0.25) this.ctx.audio.ricochet(hit.point);
+    return false;
   }
 }
 export class Rifle extends Gun {
