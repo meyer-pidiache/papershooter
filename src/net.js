@@ -1,3 +1,5 @@
+import { Peer } from 'peerjs';
+
 // Peer-to-peer networking over WebRTC, using the public PeerJS signalling service.
 // The host player's browser is authoritative. A small same-origin endpoint obtains temporary
 // Cloudflare TURN credentials so WebRTC can relay traffic when a direct connection is blocked.
@@ -32,7 +34,7 @@ const TURN_URL_PRIORITY = [
 let cachedStunServers = null, stunServersRequest = null;
 let cachedTurnServers = null, cachedTurnExpiresAt = 0, turnServersRequest = null;
 
-function peerAvailable() { return typeof window !== 'undefined' && typeof window.Peer === 'function'; }
+function peerAvailable() { return typeof Peer === 'function'; }
 const idFromError = (err) => { const m = /peer\s+(\S+)/.exec(String(err && err.message || '')); return m ? m[1] : null; };
 
 function selectTurnServers(servers) {
@@ -116,7 +118,7 @@ export class Net {
     if (!peerAvailable()) throw new Error('networking library did not load');
     const opts = await peerOptions();
     return new Promise((resolve, reject) => {
-      const peer = new window.Peer(id, opts); let settled = false;
+      const peer = new Peer(id, opts); let settled = false;
       const timer = setTimeout(() => { if (!settled) { settled = true; peer.destroy(); reject(new Error('signalling server timed out')); } }, SIGNAL_TIMEOUT);
       peer.on('open', () => { if (settled) return; settled = true; clearTimeout(timer); resolve(peer); });
       peer.on('error', (err) => { if (settled) return; settled = true; clearTimeout(timer); peer.destroy(); reject(err); });

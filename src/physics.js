@@ -128,6 +128,7 @@ export class World {
   }
 
   // Ray vs all boxes (slab test). Returns {dist, point, normal, box} or null.
+  /** @param {null | ((box: any) => boolean)} ignore */
   raycast(o, d, maxDist = 1000, ignore = null) {
     let best = null, bestT = maxDist, bAxis = -1, bSign = 0;
     const boxes = this.boxes;
