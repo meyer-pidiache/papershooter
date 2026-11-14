@@ -50,6 +50,15 @@ export class FirstPersonView {
   get landDipValue() {
     return this.landDip.value;
   }
+  hurt(amount: number) {
+    this.hurtFx = Math.min(1, this.hurtFx + amount / 40);
+  }
+  flash(amount: number) {
+    this.flashFx = amount;
+  }
+  addRoll(amount: number) {
+    this.roll += amount;
+  }
   kickLand(amount: number) {
     this.landDip.kick(amount);
   }

@@ -1,3 +1,10 @@
+import { PlayerCombat } from './player/combat-state.js';
+import {
+  makeCombatFeedback,
+  makeGrenadeFeedback,
+  makeGrappleFeedback,
+  makeMovementFeedback,
+} from './player/feedback.js';
 import { Equipment } from './player/equipment.js';
 import { FirstPersonView } from '../presentation/first-person.js';
 import { Locomotion } from './player/locomotion.js';
@@ -8,27 +15,17 @@ import { GrenadeVisuals } from '../presentation/grenades.js';
 // First-person player: movement (sprint/slide/wall-jump/mantle/air dash), swing-grapple, camera feel, health, weapons.
 import * as THREE from 'three';
 import { makeBody } from '../engine/physics.js';
-import { INK } from '../shared/ink.js';
 import { Rifle, Shotgun, Sniper, Katana } from './weapons.js';
-const PARRY_WINDOW = 0.55;
 import { clamp, damp, rand } from '../engine/math.js';
 
 const G = 26;
 const STAND_H = 1.75;
-const _v = new THREE.Vector3(),
-  _v2 = new THREE.Vector3();
 
 export class Player {
   constructor(ctx) {
     this.ctx = ctx;
     this.camera = ctx.camera;
     this.body = makeBody(ctx.level.playerStart, 0.35, STAND_H, 0.55);
-    this.maxHp = 120;
-    this.hp = 120;
-    this.alive = true;
-    this.regenDelay = 4.5;
-    this.regenRate = 11;
-    this.blockHeld = 0;
     this.view = new FirstPersonView(
       this.camera,
       this.body,
@@ -49,7 +46,6 @@ export class Player {
       adsFov: 60,
       grappling: false,
     };
-    this.lastDamageT = 10;
     this.rig = new THREE.Group();
     this.camera.add(this.rig);
     ctx.scene.add(this.camera);
@@ -79,7 +75,6 @@ export class Player {
       landDip: 0,
       alive: true,
     };
-    this.blockCd = 0;
 
     this.isLocal = true;
     this.team = 0;
@@ -90,23 +85,19 @@ export class Player {
       forward: this.forward,
       velocity: this.body.vel,
     };
+    const feedback = {
+      audio: ctx.audio,
+      input: ctx.input,
+      hud: ctx.hud,
+      effects: ctx.effects,
+      score: (points, label) => ctx.game.addScore(points, label),
+      hitstop: (duration, scale) => ctx.game.hitstop(duration, scale),
+    };
+    const weaponFeedback = () => this.weapon;
     this.grenadeSystem = new Grenades(
       ctx.world,
       new GrenadeVisuals(ctx.scene, ctx.world, ctx.resources),
-      {
-        thrown: () => {
-          this.weapon.recoil.kick(-0.4, 0.5, 1.2);
-          this.weapon.recoilRot.kick(-3, 0, -1.5);
-          ctx.audio.grappleFire();
-          ctx.input.rumble(0.2, 0.4, 50);
-        },
-        bounce: () => ctx.audio.shell(),
-        fuse: (position) =>
-          ctx.effects.strokeBurst(position.clone().add(_v.set(0, 0.22, 0)), INK.ORANGE, 2, 2.5, {
-            life: 0.12,
-            size: 0.02,
-          }),
-      },
+      makeGrenadeFeedback(feedback, weaponFeedback),
     );
     this.grappleSystem = new Grapple(
       this.body,
@@ -120,111 +111,42 @@ export class Player {
         yank: (enemy, toward) => ctx.enemies.yank(enemy, toward),
       },
       new GrappleVisuals(ctx.scene),
-      {
-        target: (mode) => ctx.hud.grappleTarget(mode),
-        outOfBreath: () => {
-          ctx.audio.winded();
-          ctx.hud.tip('grapple needs a breather', 0.9);
-        },
-        missed: () => ctx.audio.empty(),
-        fired: () => {
-          ctx.audio.grappleFire();
-          ctx.input.rumble(0.15, 0.4, 40);
-          this.weapon.recoil.kick(-0.3, 0.2, 0.5);
-        },
-        yanked: () => {
-          ctx.game.addScore(30, 'YANKED');
-          ctx.audio.grappleHit();
-          ctx.input.rumble(0.5, 0.5, 90);
-        },
-        attached: () => {
-          ctx.audio.grappleHit();
-          ctx.audio.reelLoop(true);
-          ctx.hud.grappleTarget(2);
-          ctx.input.rumble(0.3, 0.6, 60);
-        },
-        stopped: () => {
-          ctx.audio.reelLoop(false);
-          ctx.hud.grappleTarget(0);
-        },
-        released: (boost) => {
-          if (boost) {
-            ctx.audio.jump();
-            this.kickFov(3);
-          } else ctx.audio.grappleRelease();
-        },
-        exhausted: () => ctx.hud.tip('out of breath · land to recover', 1.4),
-      },
+      makeGrappleFeedback(feedback, this.view, weaponFeedback),
     );
     this.locomotion = new Locomotion(
       this.body,
       { center: this.center, right: this.right },
       { world: ctx.world, spawnPoint: () => ctx.level.playerStart },
       this.grappleSystem,
-      {
-        jump: () => {
-          ctx.audio.jump();
-          this.view.kickLand(-1.2);
+      makeMovementFeedback(feedback, { center: this.center, right: this.right }, this.view, () => {
+        this.takeDamage(20, null);
+        if (this.onFall) this.onFall();
+      }),
+    );
+    this.combat = new PlayerCombat(
+      this.body,
+      { eye: this.eye, center: this.center, forward: this.forward, right: this.right },
+      () => this.weapon,
+      makeCombatFeedback(
+        feedback,
+        { eye: this.eye, center: this.center, forward: this.forward, right: this.right },
+        this.view,
+        () => this.weapon,
+        () => {
+          this.detachGrapple(false);
+          ctx.game.onPlayerDeath();
         },
-        wallJump: (roll) => {
-          ctx.audio.wallJump();
-          this.view.roll += roll;
-          this.kickFov(2);
-          this.view.kickLand(-1.5);
-        },
-        airJump: () => {
-          ctx.audio.jump();
-          this.kickFov(1.6);
-          this.view.kickLand(-1.4);
-          _v2.copy(this.center);
-          _v2.y -= 0.7;
-          ctx.effects.strokeBurst(_v2, INK.BLUE, 9, 4.5, { life: 0.28, size: 0.028, gravity: -2 });
-        },
-        slide: () => {
-          ctx.audio.slide();
-          this.kickFov(2.5);
-          this.view.kickLand(-2.5);
-        },
-        dash: (direction) => {
-          ctx.audio.dash();
-          this.kickFov(4);
-          ctx.input.rumble(0.3, 0.6, 70);
-          this.view.roll += (direction.x * this.right.x + direction.z * this.right.z) * 0.08;
-          _v2.copy(this.center).addScaledVector(direction, -0.6);
-          ctx.effects.strokeBurst(_v2, INK.BLUE, 10, 5, { life: 0.25, size: 0.03 });
-        },
-        mantle: () => {
-          ctx.audio.mantle();
-          this.view.kickLand(-2.5);
-          this.kickFov(1.5);
-        },
-        land: (impact) => {
-          this.view.kickLand(-impact * 6 - 0.5);
-          ctx.audio.land(impact);
-          if (impact > 0.8) {
-            ctx.effects.shakeAmt += impact * 0.15;
-            ctx.input.rumble(impact * 0.4, 0.2, 80);
-          }
-        },
-        fell: () => {
-          this.takeDamage(20, null);
-          if (this.onFall) this.onFall();
-          ctx.hud.message('OFF THE PAGE', 'redrawn at the start', 1.8);
-        },
-      },
+      ),
     );
   }
   reset(pos) {
     this.grenadeSystem.cancelCharge();
-    this.blockHeld = 0;
     const b = this.body;
     b.pos.copy(pos);
     b.vel.set(0, 0, 0);
     b.onGround = false;
     b.height = STAND_H;
-    this.hp = this.maxHp;
-    this.alive = true;
-    this.lastDamageT = 10;
+    this.combat.reset();
     this.view.reset();
     this.locomotion.reset();
     this.grappleSystem.reset();
@@ -233,6 +155,57 @@ export class Player {
     this.grenadeSystem.reset();
   }
 
+  get hp() {
+    return this.combat.hp;
+  }
+  set hp(value) {
+    this.combat.hp = value;
+  }
+  get maxHp() {
+    return this.combat.maxHp;
+  }
+  set maxHp(value) {
+    this.combat.maxHp = value;
+  }
+  get alive() {
+    return this.combat.alive;
+  }
+  get regenDelay() {
+    return this.combat.regenDelay;
+  }
+  set regenDelay(value) {
+    this.combat.regenDelay = value;
+  }
+  get regenRate() {
+    return this.combat.regenRate;
+  }
+  set regenRate(value) {
+    this.combat.regenRate = value;
+  }
+  get isBlocking() {
+    return this.combat.blocking;
+  }
+  get blockRadius() {
+    return this.combat.blockRadius;
+  }
+  get parryWindow() {
+    return this.combat.parryWindow;
+  }
+  takeDamage(amount, from = null) {
+    this.combat.takeDamage(amount, from);
+  }
+  knockback(direction, amount) {
+    this.combat.knockback(direction, amount);
+  }
+  tryDeflect(projectile) {
+    return this.combat.tryDeflect(projectile);
+  }
+  tryBlockMelee(enemy) {
+    return this.combat.tryBlockMelee(enemy);
+  }
+  die() {
+    this.combat.die();
+  }
   get yaw() {
     return this.view.yaw;
   }
@@ -345,9 +318,7 @@ export class Player {
   updateNades(dt) {
     this.grenadeSystem.update(dt);
   }
-  get isBlocking() {
-    return this.weapon.kind === 'katana' && this.weapon.blocking;
-  }
+
   aimDir(spread = 0) {
     const d = this.forward.clone();
     if (spread > 0) {
@@ -392,94 +363,9 @@ export class Player {
   addAmmoAll(fraction = 0.5) {
     this.equipment.addAmmo(fraction);
   }
-  takeDamage(amount, fromPos) {
-    if (!this.alive) return;
-    this.hp -= amount;
-    this.lastDamageT = 0;
-    this.view.hurtFx = Math.min(1, this.view.hurtFx + amount / 40);
-    this.ctx.effects.shakeAmt += 0.2 + amount / 80;
-    this.ctx.audio.hurt();
-    this.ctx.input.rumble(0.8, 0.5, 160);
-    if (fromPos) {
-      _v.subVectors(fromPos, this.eye);
-      const x = _v.dot(this.right),
-        f = _v.dot(this.forward);
-      this.ctx.hud.damageFrom(Math.atan2(x, f));
-    }
-    if (this.hp <= 0) {
-      this.hp = 0;
-      this.die();
-    }
-  }
-  knockback(dir, amount) {
-    const b = this.body;
-    b.vel.addScaledVector(dir, amount);
-    b.vel.y += amount * 0.5;
-    b.onGround = false;
-  }
-  // The guard only covers what is right in front of the blade: a modest reach and a narrow
-  // cone, so shots from your flank still land and holding block is not a free win.
-  get blockRadius() {
-    return this.isBlocking && this.blockCd <= 0 ? 0.95 : 0;
-  }
-  tryDeflect(proj) {
-    if (!this.alive || !this.isBlocking || this.blockCd > 0) return false;
-    // block only what is flying in at you from the front; flank and back shots get through
-    _v.copy(proj.vel).normalize().negate();
-    if (_v.dot(this.forward) < 0.55) return false;
-    const perfect = this.weapon.blockT < 0.26;
-    const ctx = this.ctx;
-    // only a well timed guard sends it back; otherwise the round is simply knocked out of the air
-    const ret = perfect || Math.random() < 0.35;
-    this.blockCd = 0.19; // the blade has to come back before the next parry
-    this.weapon.onDeflect(perfect);
-    if (perfect) this.ctx.audio.perfectParry();
-    else this.ctx.audio.parry();
-    ctx.effects.sparks(
-      proj.pos,
-      _v2.copy(proj.vel).normalize().negate(),
-      INK.ORANGE,
-      perfect ? 14 : 8,
-      10,
-    );
-    ctx.effects.strokeBurst(proj.pos, INK.BLUE, perfect ? 8 : 5, 4.5, { life: 0.2, size: 0.028 });
-    ctx.input.rumble(0.4, 0.6, 70);
-    ctx.game.hitstop(perfect ? 0.07 : 0.025, 0.18);
-    ctx.effects.shakeAmt += 0.06;
-    this.view.flashFx = perfect ? 0.35 : 0.1;
-    ctx.game.addScore(perfect ? 60 : 15, perfect ? 'PERFECT PARRY' : 'BLOCKED');
-    return { perfect, ret };
-  }
-  get parryWindow() {
-    return this.isBlocking && this.blockHeld < PARRY_WINDOW;
-  }
-  tryBlockMelee(e) {
-    if (!this.alive || !this.parryWindow || this.blockCd > 0) return false;
-    _v.subVectors(e.center, this.eye).normalize();
-    if (_v.dot(this.forward) < 0.35) return false;
-    this.weapon.onDeflect(true);
-    this.ctx.audio.parry();
-    this.ctx.game.hitstop(0.06, 0.15);
-    this.ctx.effects.sparks(
-      _v2.copy(this.eye).addScaledVector(this.forward, 0.8),
-      this.forward.clone().negate(),
-      INK.ORANGE,
-      12,
-      8,
-    );
-    this.ctx.game.addScore(40, 'BLOCKED');
-    this.ctx.input.rumble(0.6, 0.6, 100);
-    return true;
-  }
-  die() {
-    this.alive = false;
-    this.ctx.audio.death();
-    this.detachGrapple(false);
-    this.ctx.game.onPlayerDeath();
-  }
 
   update(dt) {
-    this.lastDamageT += dt;
+    this.combat.age(dt);
     if (!this.alive) {
       this._updateDead(dt);
       return;
@@ -487,7 +373,7 @@ export class Player {
     this.rig.visible = true;
     if (this._updateLook(dt)) return;
     const motion = this.locomotion.read(dt, this.ctx.input, this.yaw, !!this.weapon.isGun);
-    this.blockCd -= dt;
+    this.combat.coolBlock(dt);
     this.locomotion.accelerate(dt, motion);
     this.locomotion.jump(dt, this.ctx.input, motion);
     this.locomotion.integrate(dt, this.ctx.input, motion);
@@ -530,14 +416,7 @@ export class Player {
   _recoverMovement(dt, sprinting) {
     const b = this.body;
 
-    if (
-      this.lastDamageT > this.regenDelay &&
-      this.hp < this.maxHp &&
-      !this._sprinting &&
-      this.grapple.state === 'idle'
-    )
-      this.hp = Math.min(this.maxHp, this.hp + this.regenRate * dt);
-    this.blockHeld = this.isBlocking ? this.blockHeld + dt : 0;
+    this.combat.recover(dt, this._sprinting, this.grapple.state === 'idle');
     // the grapple runs on breath: hanging drains it, feet on the ground bring it back fast
     this.grappleSystem.recover(dt);
     const hs2 = Math.hypot(b.vel.x, b.vel.z);
