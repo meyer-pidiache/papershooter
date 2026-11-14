@@ -15,12 +15,18 @@ import { Net } from './net.js';
 import { HUD, CONTROLS_HTML } from './hud.js';
 import { audio } from './audio.js';
 import { rand, choose, clamp } from './util.js';
+import { knownMap, mapName } from './domain/maps';
+import { FFA_TARGET, FFA_TIME, RESPAWN, formatClock as mmss, comboScore, rankScores, recordDeath } from './domain/match';
+import { planWave, bossFor, enemyName } from './domain/waves';
+import { browserPreferences } from './platform/preferences';
+import { escapeHtml as esc } from './presentation/html';
+const preferences = browserPreferences();
+const saved = preferences.load();
 
 const canvas = document.getElementById('c');
 const R = new InkRenderer(canvas);
 const world = new World();
-const knownMap = (k) => (LEVELS.some((m) => m.key === k) ? k : 'district');
-let mapKey = knownMap(localStorage.getItem('doodle_map') || 'district');
+let mapKey = saved.mapKey;
 let level = buildLevel(R.scene, world, mapKey, { arena: false });
 let nav = new NavGrid(world, level.bounds, 1).build();
 let loadedKey = mapKey, arenaLoaded = false;
@@ -41,24 +47,19 @@ const effects = new Effects(R.scene, world);
 const ctx = { scene: R.scene, camera: R.camera, world, level, nav, input, hud, effects, audio, renderer: R };
 
 // ---------------- persistent bits ----------------
-let best = Number(localStorage.getItem('doodle_best') || 0);
-let musicWanted = localStorage.getItem('doodle_music') !== '0';
-let checkpoint = Number(localStorage.getItem('doodle_checkpoint') || 0);
-let myName = (localStorage.getItem('doodle_name') || '').slice(0, 14) || 'paper' + Math.floor(Math.random() * 90 + 10);
-const settings = { sens: Number(localStorage.getItem('doodle_sens') || 100), invert: localStorage.getItem('doodle_invert') === '1' };
+let { best, musicWanted, checkpoint, myName } = saved;
+const settings = saved.settings;
 function applySettings() {
   input.mouseSens = 0.0022 * settings.sens / 100; input.padSensX = 3.4 * settings.sens / 100; input.padSensY = 2.6 * settings.sens / 100; input.invertY = settings.invert;
-  localStorage.setItem('doodle_sens', String(settings.sens)); localStorage.setItem('doodle_invert', settings.invert ? '1' : '0');
+  preferences.write('sens', String(settings.sens)); preferences.write('invert', settings.invert ? '1' : '0');
 }
 // ---------------- game state ----------------
-const FFA_TARGET = 20, FFA_TIME = 600, RESPAWN = 2.5;
 let matchLeft = FFA_TIME, clockT = 0, clockRunning = false;
-const mmss = (t) => { t = Math.max(0, Math.ceil(t)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
 const game = ctx.game = {
   state: 'start', mode: 'solo', menu: false, time: 0, hitstopT: 0, hitstopScale: 1, wave: 0, score: 0, combo: 0, comboT: 0, kills: 0, intermission: 0, queue: [], spawnT: 0, maxAlive: 6, deathT: 0,
   focus: { active: false, t: 0, chain: 0, target: null, dash: null, arm: 0, ready: false }, katanaStreak: 0, boss: null, respawnT: 0, matchT: 0, over: null, overT: 0,
   hitstop(d, s) { this.hitstopT = Math.max(this.hitstopT, d); this.hitstopScale = s; },
-  addScore(pts, label) { const mult = 1 + Math.min(this.combo, 9) * 0.25; const p = Math.round(pts * mult); this.score += p; if (label) hud.kill(label, p); hud.setScore(this.score, this.combo); },
+  addScore(pts, label) { const p = comboScore(pts, this.combo); this.score += p; if (label) hud.kill(label, p); hud.setScore(this.score, this.combo); },
   onPlayerDeath() { endFocus(); onLocalDeath(); },
 };
 const online = () => game.mode === 'ffa';
@@ -207,16 +208,6 @@ function updateArenaPickups(dt) {
 }
 
 // ---------------- solo waves ----------------
-const ROSTER = [
-  { t: 'grunt', from: 1, w: 10 }, { t: 'rusher', from: 2, w: 6 }, { t: 'bomber', from: 3, w: 3 },
-  { t: 'sniper', from: 3, w: 4 }, { t: 'flyer', from: 4, w: 4 }, { t: 'heavy', from: 5, w: 4 }, { t: 'shield', from: 6, w: 4 },
-];
-const MODIFIERS = [
-  { name: '', apply: () => { enemies.mods.speed = 1; enemies.mods.damage = 1; } },
-  { name: 'CAFFEINATED · they move fast', apply: () => { enemies.mods.speed = 1.35; enemies.mods.damage = 0.85; } },
-  { name: 'HEAVY INK · they hit harder', apply: () => { enemies.mods.speed = 0.9; enemies.mods.damage = 1.4; } },
-  { name: 'SWARM · more of them, thinner', apply: () => { enemies.mods.speed = 1.15; enemies.mods.damage = 0.9; } },
-];
 const tips = () => [
   `hold <b>${hud.key('grapple')}</b> to reel in · tap it again to let go mid-swing`,
   `block with <b>${hud.key('block')}</b> and some of their bullets go back at them`,
@@ -224,28 +215,20 @@ const tips = () => [
   `<b>${hud.key('grenade')}</b> lobs a grenade · pickups give you more`,
   `press <b>${hud.key('jump')}</b> again in the air for a double jump`,
 ];
-const bossFor = (n) => BOSSES[(Math.floor(n / 5) - 1) % BOSSES.length];
-const enemyName = (t) => ({ boss: 'THE DOODLER', eraser: 'THE ERASER', inkblot: 'THE INKBLOT' })[t] || t.toUpperCase();
 function startWave(n) {
   game.wave = n; game.queue = []; game.spawnT = 2; game.intermission = 0; game.boss = null; hud.setBoss(null, null);
-  const boss = n > 0 && n % 5 === 0;
-  const allowed = boss || n < 4 ? 1 : n < 6 ? 3 : MODIFIERS.length; const mod = MODIFIERS[Math.floor(Math.random() * allowed)];
-  mod.apply(); enemies.mods.damage *= 1.2; hud.setModifier(mod.name);
-  const swarm = mod.name.startsWith('SWARM');
-  // the crowd on screen and the wave size both keep growing with the wave number
-  game.maxAlive = Math.min(4 + Math.floor(n * 0.9) + (swarm ? 3 : 0), (swarm ? 22 : 18) + Math.floor(n / 3));
-  let count = Math.round(Math.min(5 + n * 2.0, 32 + n) * (swarm ? 1.35 : 1));
-  if (boss) { count = 7 + n; game.maxAlive += 2 + Math.floor(n / 5); game.queue.push(bossFor(n)); }
-  const pool = ROSTER.filter((r) => n >= r.from).map((r) => ({ t: r.t, w: r.w * Math.min(1, 0.3 + 0.25 * (n - r.from)) }));
-  const total = pool.reduce((a, r) => a + r.w, 0);
-  for (let i = 0; i < count; i++) { let r = Math.random() * total, t = pool[0].t; for (const c of pool) { r -= c.w; if (r <= 0) { t = c.t; break; } } game.queue.push(t); }
+  const plan = planWave(n);
+  const { boss } = plan;
+  game.queue = plan.queue; game.maxAlive = plan.maxAlive;
+  enemies.mods.speed = plan.speed; enemies.mods.damage = plan.damage;
+  const mod = { name: plan.modifier }; hud.setModifier(mod.name);
   if (boss) { hud.message('WAVE ' + n, enemyName(bossFor(n)) + ' IS COMING', 3); audio.bossRoar(player.center); }
   else hud.message('WAVE ' + n, n === 1 ? 'they are crawling off the page' : mod.name || choose(['ink harder', 'keep scribbling', 'stay off the ground', 'swing for it', 'return their bullets']), 2.6);
   audio.wave();
   if (n <= tips().length) hud.tip(tips()[n - 1], 7);
   player.grenades = Math.min(player.maxGrenades, player.grenades + 1);
   for (let i = 0; i < 7; i++) spawnPickup(i < 5 ? 'ammo' : 'health', choose(level.pickups));
-  if (n >= 5 && n % 5 === 0 && n > checkpoint) { checkpoint = n; localStorage.setItem('doodle_checkpoint', String(n)); hud.kill('CHECKPOINT · WAVE ' + n, 0); }
+  if (n >= 5 && n % 5 === 0 && n > checkpoint) { checkpoint = n; preferences.write('checkpoint', String(n)); hud.kill('CHECKPOINT · WAVE ' + n, 0); }
 }
 function pickSpawn(type) {
   const spots = type === 'sniper' ? level.snipers : level.spawns; const pp = player.body.pos;
@@ -394,13 +377,12 @@ function respawnLocal() {
   effects.strokeBurst(player.center, INK.BLUE, 24, 6, { life: 0.5, size: 0.03 }); audio.spawn(player.center);
 }
 function tallyDeath(victim, killer) {
-  const v = scores.get(victim); if (v) v.deaths++;
-  if (killer && killer !== victim) { const k = scores.get(killer); if (k) k.kills++; }
+  recordDeath(scores, victim, killer);
   sendScores(); checkWin();
 }
 function sendScores() { const rows = [...scores.entries()].map(([id, s]) => ({ id, ...s })); net.send('score', rows); applyScores(rows); }
 function applyScores(rows) { scores.clear(); for (const r of rows) scores.set(r.id, { name: r.name, kills: r.kills, deaths: r.deaths }); refreshScoreHud(); }
-function sortedScores() { return [...scores.entries()].sort((a, b) => b[1].kills - a[1].kills || a[1].deaths - b[1].deaths); }
+function sortedScores() { return rankScores(scores); }
 function refreshScoreHud() {
   if (!online()) return;
   const rows = sortedScores(); const top = rows.slice(0, 3); const myIdx = rows.findIndex(([id]) => id === net.id);
@@ -411,7 +393,7 @@ function refreshScoreHud() {
 }
 function boardHTML(title = 'FREE FOR ALL') {
   const rows = sortedScores();
-  return `<h3>${title}</h3>${rows.map(([id, s]) => `<div class="${id === net.id ? 'me' : ''}"><span>${s.name}${id === net.id ? ' (you)' : ''}</span><span>${s.kills} kills · ${s.deaths} deaths</span></div>`).join('')}<div class="foot">first to ${FFA_TARGET} · ${mmss(matchLeft)} left · lobby ${String(net.aliasCode || net.code || '').replace(/-\d+$/, '')}</div>`;
+  return `<h3>${title}</h3>${rows.map(([id, s]) => `<div class="${id === net.id ? 'me' : ''}"><span>${esc(s.name)}${id === net.id ? ' (you)' : ''}</span><span>${s.kills} kills · ${s.deaths} deaths</span></div>`).join('')}<div class="foot">first to ${FFA_TARGET} · ${mmss(matchLeft)} left · lobby ${String(net.aliasCode || net.code || '').replace(/-\d+$/, '')}</div>`;
 }
 function checkWin() {
   if (!net.isHost || !online() || game.over) return;
@@ -422,7 +404,7 @@ function checkWin() {
 function endMatch(winner) {
   game.over = winner; game.overT = 0; game.state = 'over'; endFocus(); input.exitLock(); hud.setBoard(null);
   const title = winner.id === net.id ? 'YOU WIN' : (winner.name || 'someone') + ' WINS';
-  hud.setGameplayVisible(false); hud.showScreen(`<h1>${title}</h1><div class="scoreboard">${sortedScores().map(([id, s]) => `<div class="${id === net.id ? 'me' : ''}"><span>${s.name}</span><span>${s.kills} K · ${s.deaths} D</span></div>`).join('')}</div><div class="go" id="overGo">back to the lobby in a moment…</div>`);
+  hud.setGameplayVisible(false); hud.showScreen(`<h1>${esc(title)}</h1><div class="scoreboard">${sortedScores().map(([id, s]) => `<div class="${id === net.id ? 'me' : ''}"><span>${esc(s.name)}</span><span>${s.kills} K · ${s.deaths} D</span></div>`).join('')}</div><div class="go" id="overGo">back to the lobby in a moment…</div>`);
 }
 
 // ---------------- networking ----------------
@@ -607,11 +589,11 @@ function wireSettings() {
   const sens = box.querySelector('#setSens'), out = box.querySelector('#setSensV');
   sens.addEventListener('input', () => { settings.sens = Number(sens.value); out.textContent = settings.sens + '%'; applySettings(); });
   box.querySelector('#setInv').addEventListener('change', (e) => { settings.invert = e.target.checked; applySettings(); });
-  box.querySelector('#setMus').addEventListener('change', (e) => { musicWanted = e.target.checked; localStorage.setItem('doodle_music', musicWanted ? '1' : '0'); audio.musicOn(musicWanted); });
+  box.querySelector('#setMus').addEventListener('change', (e) => { musicWanted = e.target.checked; preferences.write('music', musicWanted ? '1' : '0'); audio.musicOn(musicWanted); });
 }
 function wireName(box) {
   const nb = box.querySelector('#setName'); if (!nb) return;
-  nb.addEventListener('input', (e) => { myName = e.target.value.trim().slice(0, 14) || myName; localStorage.setItem('doodle_name', myName); player.name = myName; net.hostName = myName; });
+  nb.addEventListener('input', (e) => { myName = e.target.value.trim().slice(0, 14) || myName; preferences.write('name', myName); player.name = myName; net.hostName = myName; });
 }
 function checkpointHTML() {
   if (checkpoint < 5) return '';
@@ -620,10 +602,8 @@ function checkpointHTML() {
   return h + '</div>';
 }
 function wireCheckpoints(onGo) { const box = hud.el.panel.querySelector('.checkpoints'); if (!box) return; box.addEventListener('click', (e) => { e.stopPropagation(); const b = e.target.closest('button'); if (b) onGo(Number(b.dataset.cp)); }); }
-const mapName = (k) => (LEVELS.find((m) => m.key === k) || LEVELS[0]).name;
 function mapHTML(sel, canPick) { if (LEVELS.length < 2) return ''; return `<div class="mapsel" id="mapsel"><span>map</span>${LEVELS.map((m) => `<button type="button" class="mapbtn${m.key === sel ? ' on' : ''}" data-map="${m.key}" ${canPick ? '' : 'disabled'}>${m.name}<i>${m.blurb}</i></button>`).join('')}</div>`; }
 function wireMap(onPick) { const box = hud.el.panel.querySelector('#mapsel'); if (!box) return; box.addEventListener('click', (e) => { e.stopPropagation(); const b = e.target.closest('.mapbtn'); if (b && !b.disabled) onPick(b.dataset.map); }); }
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 function mainHTML() {
   return `<h1>PAPER SHOOTER</h1><h2>a scribbled survival shooter</h2>
@@ -693,7 +673,7 @@ function showStart() {
   hud.showScreen(html);
   const p = hud.el.panel;
   if (screen === 'main') {
-    wireSettings(); wireCheckpoints((w) => beginAtWave(w)); wireMap((k) => { mapKey = k; localStorage.setItem('doodle_map', k); showStart(); });
+    wireSettings(); wireCheckpoints((w) => beginAtWave(w)); wireMap((k) => { mapKey = k; preferences.write('map', k); showStart(); });
     p.querySelector('#soloBtn').addEventListener('click', (e) => { e.stopPropagation(); begin(); });
     p.querySelector('#onlineBtn').addEventListener('click', (e) => { e.stopPropagation(); screen = 'online'; showStart(); });
   } else wireOnline();
@@ -708,7 +688,7 @@ function showPause() {
 }
 function showClickToPlay() { hud.showScreen(`<h1>MATCH ON</h1><h2>free for all · first to ${FFA_TARGET}</h2><div class="go">CLICK ANYWHERE (or press ${hud.key('confirm')}) TO PLAY</div>`); }
 function showDead() {
-  hud.setGameplayVisible(false); const nb = game.score > best; if (nb) { best = game.score; localStorage.setItem('doodle_best', String(best)); }
+  hud.setGameplayVisible(false); const nb = game.score > best; if (nb) { best = game.score; preferences.write('best', String(best)); }
   hud.showScreen(`<h1>ERASED</h1><div class="stats">you survived <b>${game.wave}</b> wave${game.wave === 1 ? '' : 's'} · <b>${game.kills}</b> kills · score <b>${game.score}</b>${nb ? ' · <b>NEW BEST</b>' : ` · best ${best}`}</div>${checkpointHTML()}${menuBtnHTML()}<div class="go">CLICK (or press ${hud.key('confirm')}) TO DRAW AGAIN</div>`);
   wireCheckpoints((w) => beginAtWave(w)); wireMenuBtn();
 }
@@ -780,7 +760,7 @@ function step(now) {
   if (st === 'start' || st === 'pause' || st === 'dead' || st === 'over') { if (input.pressed('jump') || input.pressed('confirm') || (st === 'pause' && input.pressed('pause'))) hud.onScreenClick(); }
   else if ((st === 'play' || (st === 'dying' && online())) && input.pressed('pause')) { if (game.menu) resume(); else { pause(); input.exitLock(); } }
   else if ((st === 'play' || st === 'dying') && game.menu && (input.pressed('jump') || input.pressed('confirm'))) resume();
-  if (input.pressed('music')) { musicWanted = !musicWanted; localStorage.setItem('doodle_music', musicWanted ? '1' : '0'); audio.musicOn(musicWanted); hud.tip(musicWanted ? 'music on' : 'music off', 1.5); }
+  if (input.pressed('music')) { musicWanted = !musicWanted; preferences.write('music', musicWanted ? '1' : '0'); audio.musicOn(musicWanted); hud.tip(musicWanted ? 'music on' : 'music off', 1.5); }
   if (online() && playing) {
     if (input.usingGamepad && input.pressed('score')) boardToggle = !boardToggle;
     const want = ((input.down('score') && !input.usingGamepad) || boardToggle) && !game.menu; if (want !== !hud.el.board.hidden) hud.setBoard(want ? boardHTML() : null);

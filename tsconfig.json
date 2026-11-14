@@ -12,6 +12,7 @@
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     "resolveJsonModule": true
+    ,"allowImportingTsExtensions": true
   },
   "include": ["src", "server", "tests", "*.config.ts", "api"]
 }

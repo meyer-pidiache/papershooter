@@ -180,7 +180,7 @@ class Projectiles {
   }
   _deflect(p, player, perfect) {
     const mgr = this.mgr; p.deflected = true; p.ink = INK.BLUE; p.dmg *= perfect ? 3.5 : 2.2; p.life = 3;
-    let target = null;
+    let target;
     if (perfect && p.owner && p.owner.alive) target = p.owner; else target = mgr.nearestVisible(player.eye, player.forward, Math.cos(0.7), 70) || (p.owner && p.owner.alive ? p.owner : null);
     const speed = p.vel.length() * 1.6; if (target) _d.subVectors(target.center, p.pos).normalize(); else _d.copy(player.forward);
     p.vel.copy(_d).multiplyScalar(speed); mgr.ctx.effects.sparks(p.pos, _d, INK.ORANGE, 10, 9); mgr.ctx.effects.strokeBurst(p.pos, INK.BLUE, 8, 4, { life: 0.2 });
@@ -577,7 +577,7 @@ export class EnemyManager {
     const inRange = e.los && dist < T.range;
     if (inRange) {
       e.aimAmt = damp(e.aimAmt, 1, 8, dt); e.yawT = yawTo;
-      let mx = 0, mz = 0; const nx = dx / dist, nz = dz / dist;
+      let mx, mz; const nx = dx / dist, nz = dz / dist;
       if (T.stationary) { mx = 0; mz = 0; }
       else if (dist > T.stop * e.keepMul) { this._follow(e, dt, pp, T.speed * 0.8); this._shoot(e, dt, pc, P); e.yawT = yawTo; return; }
       // if the player is up on something, keep working the route up rather than strafing along
