@@ -80,6 +80,10 @@ export function makeMovementFeedback(
   onFall: () => void,
 ): MovementFeedback {
   return {
+    lunge: () => {
+      ports.audio.dash();
+      camera.kickFov(3);
+    },
     jump: () => {
       ports.audio.jump();
       camera.kickLand(-1.2);

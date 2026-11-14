@@ -66,3 +66,10 @@ export interface GrappleState {
   t: number;
   swingT: number;
 }
+
+export interface GrappleServices {
+  world: GrappleWorldPort;
+  queries: GrappleQueries;
+  view: GrappleVisualPort;
+  feedback: GrappleFeedback;
+}

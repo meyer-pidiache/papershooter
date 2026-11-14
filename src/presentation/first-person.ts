@@ -1,6 +1,6 @@
 import { Vector3, type PerspectiveCamera } from 'three';
 import type { Body } from '../engine/physics.js';
-import { clamp, damp, Spring } from '../engine/math.js';
+import { clamp, damp, rand, Spring } from '../engine/math.js';
 export interface FirstPersonFrame {
   alive: boolean;
   crouching: boolean;
@@ -62,6 +62,16 @@ export class FirstPersonView {
   kickLand(amount: number) {
     this.landDip.kick(amount);
   }
+  aimDir(spread = 0) {
+    const d = this.forward.clone();
+    if (spread > 0) {
+      d.addScaledVector(this.right, rand(-spread, spread));
+      d.y += rand(-spread, spread);
+      d.normalize();
+    }
+    return d;
+  }
+
   recoil(p: number, y: number) {
     this.pitch = clamp(this.pitch + p * 0.55, -1.5, 1.5);
     this.recoilPitch.kick(p * 22);

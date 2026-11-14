@@ -14,6 +14,7 @@ function fixture() {
   const grapple: MovementGrapple = { mode: 'idle', detach: vi.fn(), update: vi.fn() };
   const feedback: MovementFeedback = {
     jump: vi.fn(),
+    lunge: vi.fn(),
     wallJump: vi.fn(),
     airJump: vi.fn(),
     slide: vi.fn(),
@@ -83,6 +84,15 @@ describe('locomotion boundaries', () => {
     expect(f.body.vel.length()).toBe(0);
     expect(f.feedback.fell).toHaveBeenCalledOnce();
     expect(f.grapple.detach).toHaveBeenCalledExactlyOnceWith(false);
+  });
+  it('applies a lunge along the view direction and releases ground attachment', () => {
+    const f = fixture();
+    f.body.onGround = true;
+    f.motor.lunge(4, new Vector3(0, 0, -1));
+    expect(f.body.onGround).toBe(false);
+    expect(f.body.vel.z).toBe(-4);
+    expect(f.body.vel.y).toBe(2.5);
+    expect(f.feedback.lunge).toHaveBeenCalledOnce();
   });
   it('mantles a reachable ledge when the space above it is clear', () => {
     const f = fixture();

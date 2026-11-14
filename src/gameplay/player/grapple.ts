@@ -9,6 +9,7 @@ import type {
   GrappleState,
   GrappleVisualPort,
   GrappleWorldPort,
+  GrappleServices,
 } from './grapple-contracts.js';
 
 // Owns hook transitions, rope constraints and stamina. Shared body/pose are explicit physics data.
@@ -33,14 +34,20 @@ export class Grapple {
   private readonly direction = new Vector3();
   private readonly pump = new Vector3();
   private readonly hand = new Vector3();
+  private readonly world: GrappleWorldPort;
+  private readonly queries: GrappleQueries;
+  private readonly view: GrappleVisualPort;
+  private readonly feedback: GrappleFeedback;
   constructor(
     private readonly body: Body,
     private readonly pose: GrapplePose,
-    private readonly world: GrappleWorldPort,
-    private readonly queries: GrappleQueries,
-    private readonly view: GrappleVisualPort,
-    private readonly feedback: GrappleFeedback,
-  ) {}
+    services: GrappleServices,
+  ) {
+    this.world = services.world;
+    this.queries = services.queries;
+    this.view = services.view;
+    this.feedback = services.feedback;
+  }
   get mode() {
     return this.state.state;
   }

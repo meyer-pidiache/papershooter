@@ -43,6 +43,7 @@ export interface MotionFrame extends JumpMotion {
 }
 export interface MovementFeedback {
   jump(): void;
+  lunge(): void;
   wallJump(roll: number): void;
   airJump(): void;
   slide(): void;

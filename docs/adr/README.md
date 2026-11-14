@@ -11,6 +11,7 @@
 | [0007](0007-module-size-threshold.md)      | Researched 300-line module-review threshold; amends 0006            | Accepted |
 | [0008](0008-scene-resource-ownership.md)   | Shared scene resources, fragment transfer and explicit leases       | Accepted |
 | [0009](0009-presentation-ownership.md)     | Separate recipes, simulation, scheduling and presentation lifetimes | Accepted |
+| [0010](0010-player-state-ownership.md)     | Independent player state owners and explicit phase coordination     | Accepted |
 
 Each decision records context, alternatives, consequences and evidence. Revisit a decision when its
 constraints change; retain superseded records so their reasoning remains available.

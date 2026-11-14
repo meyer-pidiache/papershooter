@@ -1,3 +1,4 @@
+// Compose player state owners, preserve phase order and expose the actor command surface.
 import { PlayerCombat } from './player/combat-state.js';
 import {
   makeCombatFeedback,
@@ -12,13 +13,11 @@ import { Grapple } from './player/grapple.js';
 import { GrappleVisuals } from '../presentation/grapple.js';
 import { Grenades } from './player/grenades.js';
 import { GrenadeVisuals } from '../presentation/grenades.js';
-// First-person player: movement (sprint/slide/wall-jump/mantle/air dash), swing-grapple, camera feel, health, weapons.
 import * as THREE from 'three';
 import { makeBody } from '../engine/physics.js';
 import { Rifle, Shotgun, Sniper, Katana } from './weapons.js';
-import { clamp, damp, rand } from '../engine/math.js';
+import { clamp } from '../engine/math.js';
 
-const G = 26;
 const STAND_H = 1.75;
 
 export class Player {
@@ -102,16 +101,18 @@ export class Player {
     this.grappleSystem = new Grapple(
       this.body,
       { eye: this.eye, center: this.center, forward: this.forward, right: this.right },
-      ctx.world,
       {
-        raycastEnemy: (origin, direction, distance) =>
-          ctx.enemies.raycast(origin, direction, distance),
-        enemies: () => ctx.enemies.enemies,
-        landmarks: () => ctx.level,
-        yank: (enemy, toward) => ctx.enemies.yank(enemy, toward),
+        world: ctx.world,
+        queries: {
+          raycastEnemy: (origin, direction, distance) =>
+            ctx.enemies.raycast(origin, direction, distance),
+          enemies: () => ctx.enemies.enemies,
+          landmarks: () => ctx.level,
+          yank: (enemy, toward) => ctx.enemies.yank(enemy, toward),
+        },
+        view: new GrappleVisuals(ctx.scene),
+        feedback: makeGrappleFeedback(feedback, this.view, weaponFeedback),
       },
-      new GrappleVisuals(ctx.scene),
-      makeGrappleFeedback(feedback, this.view, weaponFeedback),
     );
     this.locomotion = new Locomotion(
       this.body,
@@ -320,27 +321,10 @@ export class Player {
   }
 
   aimDir(spread = 0) {
-    const d = this.forward.clone();
-    if (spread > 0) {
-      d.addScaledVector(this.right, rand(-spread, spread));
-      d.y += rand(-spread, spread);
-      d.normalize();
-    }
-    return d;
+    return this.view.aimDir(spread);
   }
-
   lunge(speed) {
-    const d = this.forward.clone();
-    d.y = clamp(d.y, -0.2, 0.5);
-    d.normalize();
-    const b = this.body;
-    b.vel.addScaledVector(d, speed);
-    if (b.onGround) {
-      b.vel.y = Math.max(b.vel.y, 2.5);
-      b.onGround = false;
-    }
-    this.ctx.audio.dash();
-    this.kickFov(3);
+    this.locomotion.lunge(speed, this.forward);
   }
   get weapons() {
     return this.equipment.weapons;
@@ -389,14 +373,8 @@ export class Player {
   }
 
   _updateDead(dt) {
-    const ctx = this.ctx,
-      b = this.body;
-
     this.view.sink(dt);
-    b.vel.x = damp(b.vel.x, 0, 4, dt);
-    b.vel.z = damp(b.vel.z, 0, 4, dt);
-    b.vel.y -= G * dt;
-    ctx.world.moveBody(b, dt);
+    this.locomotion.fall(dt);
     this.view.updateDirections();
     this.grenadeSystem.update(dt);
     this._updateCamera(dt);

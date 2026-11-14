@@ -44,7 +44,12 @@ function fixture() {
     exhausted: vi.fn(),
   };
   const view: GrappleVisualPort = { draw: vi.fn(), hide: vi.fn() };
-  const grapple = new Grapple(body, pose, world, queries, view, feedback);
+  const grapple = new Grapple(body, pose, {
+    world: world,
+    queries: queries,
+    view: view,
+    feedback: feedback,
+  });
   return { body, pose, world, queries, landmarks, enemies, feedback, view, grapple };
 }
 

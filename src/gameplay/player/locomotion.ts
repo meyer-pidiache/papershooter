@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { clamp } from '../../engine/math.js';
+import { clamp, damp } from '../../engine/math.js';
 import type { Body } from '../../engine/physics.js';
 import { acceleratePlanar } from '../../domain/locomotion.js';
 import { Jumps } from './jumps.js';
@@ -80,26 +80,11 @@ export class Locomotion {
     let length = wish.length();
     if (length > 1e-4) wish.divideScalar(length);
     length = Math.min(1, length);
-    if (input.usingGamepad) {
-      if (input.pressed('sprint')) this.sprintToggle = !this.sprintToggle;
-      if (mv.y < 0.1) this.sprintToggle = false;
-    } else this.sprintToggle = input.down('sprint');
+    this.readSprint(input, mv.y);
     const aiming = (this.aiming = input.down('aim') && gun),
       speed = Math.hypot(b.vel.x, b.vel.z),
       crouch = input.down('crouch');
-    if (input.pressed('crouch') && b.onGround && speed > 6.3 && !this.sliding)
-      this.startSlide(speed);
-    if (this.sliding) {
-      this.slideTime += dt;
-      if (!crouch || speed < 3.5 || this.airTime > 0.35) this.sliding = false;
-    }
-    let wantCrouch = (crouch && b.onGround) || this.sliding;
-    if (!wantCrouch && this.crouching) {
-      b.height = 1.75;
-      if (this.environment.world.overlapsBody(b)) wantCrouch = true;
-    }
-    this.crouching = wantCrouch;
-    b.height = this.crouching ? 1.05 : 1.75;
+    this.updatePosture(dt, input, crouch, speed);
     const sprinting = (this.sprinting =
       this.sprintToggle && mv.y > 0.1 && !this.crouching && !aiming);
     this.landGrace -= dt;
@@ -114,6 +99,50 @@ export class Locomotion {
     m.grounded = b.onGround;
     m.landGraceT = this.landGrace;
     return m;
+  }
+  private readSprint(input: MovementInput, forward: number) {
+    if (input.usingGamepad) {
+      if (input.pressed('sprint')) this.sprintToggle = !this.sprintToggle;
+      if (forward < 0.1) this.sprintToggle = false;
+    } else this.sprintToggle = input.down('sprint');
+  }
+  private updatePosture(dt: number, input: MovementInput, crouch: boolean, speed: number) {
+    const b = this.body;
+    this.updateSlide(dt, crouch, speed, input.pressed('crouch'));
+    let wantCrouch = (crouch && b.onGround) || this.sliding;
+    if (!wantCrouch && this.crouching) {
+      b.height = 1.75;
+      if (this.environment.world.overlapsBody(b)) wantCrouch = true;
+    }
+    this.crouching = wantCrouch;
+    b.height = this.crouching ? 1.05 : 1.75;
+  }
+  private updateSlide(dt: number, crouch: boolean, speed: number, pressed: boolean) {
+    const b = this.body;
+    if (pressed && b.onGround && speed > 6.3 && !this.sliding) this.startSlide(speed);
+    if (this.sliding) {
+      this.slideTime += dt;
+      if (!crouch || speed < 3.5 || this.airTime > 0.35) this.sliding = false;
+    }
+  }
+  fall(dt: number) {
+    const b = this.body;
+    b.vel.x = damp(b.vel.x, 0, 4, dt);
+    b.vel.z = damp(b.vel.z, 0, 4, dt);
+    b.vel.y -= 26 * dt;
+    this.environment.world.moveBody(b, dt);
+  }
+  lunge(speed: number, forward: Vector3) {
+    const direction = forward.clone();
+    direction.y = clamp(direction.y, -0.2, 0.5);
+    direction.normalize();
+    const b = this.body;
+    b.vel.addScaledVector(direction, speed);
+    if (b.onGround) {
+      b.vel.y = Math.max(b.vel.y, 2.5);
+      b.onGround = false;
+    }
+    this.feedback.lunge();
   }
   accelerate(dt: number, motion: MotionFrame) {
     if (this.body.onGround) {
