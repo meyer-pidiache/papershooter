@@ -6,7 +6,7 @@ import { DebrisSimulation } from './effects/debris.js';
 import * as recipes from './effects/particle-recipes.js';
 import * as blasts from './effects/blast-recipes.js';
 import { INK } from '../shared/ink.js';
-import { rand } from '../engine/math.js';
+import { rand, damp } from '../engine/math.js';
 export class Effects {
   constructor(scene, world, resources = new SceneResources()) {
     this.renderer = new ParticleRenderer(scene, resources);
@@ -24,6 +24,11 @@ export class Effects {
   }
   get gibsAlive() {
     return this.fragments.gibsAlive;
+  }
+  sampleShake(dt) {
+    const amount = this.shakeAmt;
+    this.shakeAmt = damp(amount, 0, 7, dt);
+    return amount;
   }
   clear() {
     this.simulation.clear();

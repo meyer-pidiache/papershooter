@@ -1,3 +1,4 @@
+import { FirstPersonView } from '../presentation/first-person.js';
 import { Locomotion } from './player/locomotion.js';
 import { Grapple } from './player/grapple.js';
 import { GrappleVisuals } from '../presentation/grapple.js';
@@ -9,12 +10,10 @@ import { makeBody } from '../engine/physics.js';
 import { INK } from '../shared/ink.js';
 import { Rifle, Shotgun, Sniper, Katana } from './weapons.js';
 const PARRY_WINDOW = 0.55;
-import { clamp, damp, rand, Spring } from '../engine/math.js';
+import { clamp, damp, rand } from '../engine/math.js';
 
 const G = 26;
-const STAND_H = 1.75,
-  EYE_STAND = 1.6,
-  EYE_CROUCH = 0.88;
+const STAND_H = 1.75;
 const _v = new THREE.Vector3(),
   _v2 = new THREE.Vector3();
 
@@ -22,23 +21,33 @@ export class Player {
   constructor(ctx) {
     this.ctx = ctx;
     this.camera = ctx.camera;
-    this.camera.rotation.order = 'YXZ';
     this.body = makeBody(ctx.level.playerStart, 0.35, STAND_H, 0.55);
-    this.yaw = 0;
-    this.pitch = 0;
     this.maxHp = 120;
     this.hp = 120;
     this.alive = true;
     this.regenDelay = 4.5;
     this.regenRate = 11;
     this.blockHeld = 0;
-    this.eye = new THREE.Vector3();
-    this.center = new THREE.Vector3();
-    this.forward = new THREE.Vector3(0, 0, -1);
-    this.right = new THREE.Vector3(1, 0, 0);
-    this.speed = 0;
-    this.hurtFx = 0;
-    this.flashFx = 0;
+    this.view = new FirstPersonView(
+      this.camera,
+      this.body,
+      (dt) => ctx.effects.sampleShake(dt),
+      (gain) => ctx.audio.footstep(gain),
+    );
+    this.eye = this.view.eye;
+    this.center = this.view.center;
+    this.forward = this.view.forward;
+    this.right = this.view.right;
+    this.viewFrame = {
+      alive: true,
+      crouching: false,
+      sliding: false,
+      strafe: 0,
+      sprinting: false,
+      aiming: false,
+      adsFov: 60,
+      grappling: false,
+    };
     this.lastDamageT = 10;
     this.rig = new THREE.Group();
     this.camera.add(this.rig);
@@ -54,19 +63,8 @@ export class Player {
     this.weapon.equip();
     this.returnT = 0;
     this.prevWeaponIndex = 0;
-    this.recoilPitch = new Spring(190, 17);
-    this.recoilYaw = new Spring(190, 17);
-    this.fovKick = new Spring(220, 14);
-    this.landDip = new Spring(170, 15);
-    this.roll = 0;
-    this.fov = 82;
-    this.bobPhase = 0;
-    this.bobAmt = 0;
-    this.stepDist = 0;
-    this.eyeH = EYE_STAND;
     this.blockCd = 0;
 
-    this.deathT = 0;
     this.isLocal = true;
     this.team = 0;
     this.name = 'you';
@@ -151,18 +149,18 @@ export class Player {
       {
         jump: () => {
           ctx.audio.jump();
-          this.landDip.kick(-1.2);
+          this.view.kickLand(-1.2);
         },
         wallJump: (roll) => {
           ctx.audio.wallJump();
-          this.roll += roll;
+          this.view.roll += roll;
           this.kickFov(2);
-          this.landDip.kick(-1.5);
+          this.view.kickLand(-1.5);
         },
         airJump: () => {
           ctx.audio.jump();
           this.kickFov(1.6);
-          this.landDip.kick(-1.4);
+          this.view.kickLand(-1.4);
           _v2.copy(this.center);
           _v2.y -= 0.7;
           ctx.effects.strokeBurst(_v2, INK.BLUE, 9, 4.5, { life: 0.28, size: 0.028, gravity: -2 });
@@ -170,23 +168,23 @@ export class Player {
         slide: () => {
           ctx.audio.slide();
           this.kickFov(2.5);
-          this.landDip.kick(-2.5);
+          this.view.kickLand(-2.5);
         },
         dash: (direction) => {
           ctx.audio.dash();
           this.kickFov(4);
           ctx.input.rumble(0.3, 0.6, 70);
-          this.roll += (direction.x * this.right.x + direction.z * this.right.z) * 0.08;
+          this.view.roll += (direction.x * this.right.x + direction.z * this.right.z) * 0.08;
           _v2.copy(this.center).addScaledVector(direction, -0.6);
           ctx.effects.strokeBurst(_v2, INK.BLUE, 10, 5, { life: 0.25, size: 0.03 });
         },
         mantle: () => {
           ctx.audio.mantle();
-          this.landDip.kick(-2.5);
+          this.view.kickLand(-2.5);
           this.kickFov(1.5);
         },
         land: (impact) => {
-          this.landDip.kick(-impact * 6 - 0.5);
+          this.view.kickLand(-impact * 6 - 0.5);
           ctx.audio.land(impact);
           if (impact > 0.8) {
             ctx.effects.shakeAmt += impact * 0.15;
@@ -211,13 +209,8 @@ export class Player {
     b.height = STAND_H;
     this.hp = this.maxHp;
     this.alive = true;
-    this.yaw = 0;
-    this.pitch = 0;
-    this.roll = 0;
-    this.hurtFx = 0;
-    this.flashFx = 0;
-    this.deathT = 0;
     this.lastDamageT = 10;
+    this.view.reset();
     this.locomotion.reset();
     this.grappleSystem.reset();
     for (const w of this.weapons)
@@ -229,10 +222,52 @@ export class Player {
       }
     this.switchTo(0, true);
     this.rig.visible = true;
-    this.eyeH = EYE_STAND;
     this.grenadeSystem.reset();
   }
 
+  get yaw() {
+    return this.view.yaw;
+  }
+  set yaw(value) {
+    this.view.yaw = value;
+  }
+  get pitch() {
+    return this.view.pitch;
+  }
+  set pitch(value) {
+    this.view.pitch = value;
+  }
+  get speed() {
+    return this.view.speed;
+  }
+  get hurtFx() {
+    return this.view.hurtFx;
+  }
+  get flashFx() {
+    return this.view.flashFx;
+  }
+  recoil(p, y) {
+    this.view.recoil(p, y);
+  }
+  kickFov(value) {
+    this.view.kickFov(value);
+  }
+  idleCam(time) {
+    this.view.idle(time);
+    this.rig.visible = false;
+  }
+  _updateCamera(dt) {
+    const frame = this.viewFrame;
+    frame.alive = this.alive;
+    frame.crouching = this.crouching;
+    frame.sliding = this.sliding;
+    frame.strafe = this._mv.x;
+    frame.sprinting = this._sprinting;
+    frame.aiming = this._aiming;
+    frame.adsFov = this.weapon.adsFov;
+    frame.grappling = this.grapple.state === 'on';
+    this.view.update(dt, frame);
+  }
   get crouching() {
     return this.locomotion.crouching;
   }
@@ -314,14 +349,7 @@ export class Player {
     }
     return d;
   }
-  recoil(p, y) {
-    this.pitch = clamp(this.pitch + p * 0.55, -1.5, 1.5);
-    this.recoilPitch.kick(p * 22);
-    this.recoilYaw.kick(y * 30);
-  }
-  kickFov(v) {
-    this.fovKick.kick(v * 30);
-  }
+
   lunge(speed) {
     const d = this.forward.clone();
     d.y = clamp(d.y, -0.2, 0.5);
@@ -354,7 +382,7 @@ export class Player {
     if (!this.alive) return;
     this.hp -= amount;
     this.lastDamageT = 0;
-    this.hurtFx = Math.min(1, this.hurtFx + amount / 40);
+    this.view.hurtFx = Math.min(1, this.view.hurtFx + amount / 40);
     this.ctx.effects.shakeAmt += 0.2 + amount / 80;
     this.ctx.audio.hurt();
     this.ctx.input.rumble(0.8, 0.5, 160);
@@ -404,7 +432,7 @@ export class Player {
     ctx.input.rumble(0.4, 0.6, 70);
     ctx.game.hitstop(perfect ? 0.07 : 0.025, 0.18);
     ctx.effects.shakeAmt += 0.06;
-    this.flashFx = perfect ? 0.35 : 0.1;
+    this.view.flashFx = perfect ? 0.35 : 0.1;
     ctx.game.addScore(perfect ? 60 : 15, perfect ? 'PERFECT PARRY' : 'BLOCKED');
     return { perfect, ret };
   }
@@ -431,24 +459,9 @@ export class Player {
   }
   die() {
     this.alive = false;
-    this.deathT = 0;
     this.ctx.audio.death();
     this.detachGrapple(false);
     this.ctx.game.onPlayerDeath();
-  }
-  idleCam(t) {
-    const c = this.camera;
-    c.position.set(Math.sin(t * 0.08) * 70, 30 + Math.sin(t * 0.23) * 4, Math.cos(t * 0.08) * 70);
-    c.lookAt(0, 10, 0);
-    this.rig.visible = false;
-    this.eye.copy(c.position);
-    this.center.copy(c.position);
-    c.getWorldDirection(this.forward);
-    this.right.set(this.forward.z, 0, -this.forward.x).normalize();
-    if (Math.abs(c.fov - 70) > 0.01) {
-      c.fov = 70;
-      c.updateProjectionMatrix();
-    }
   }
 
   update(dt) {
@@ -479,20 +492,12 @@ export class Player {
     const ctx = this.ctx,
       b = this.body;
 
-    this.deathT += dt;
-    this.eyeH = damp(this.eyeH, 0.35, 3, dt);
-    this.roll = damp(this.roll, 0.9, 3, dt);
-    this.pitch = damp(this.pitch, -0.35, 3, dt);
+    this.view.sink(dt);
     b.vel.x = damp(b.vel.x, 0, 4, dt);
     b.vel.z = damp(b.vel.z, 0, 4, dt);
     b.vel.y -= G * dt;
     ctx.world.moveBody(b, dt);
-    this.forward.set(
-      -Math.sin(this.yaw) * Math.cos(this.pitch),
-      Math.sin(this.pitch),
-      -Math.cos(this.yaw) * Math.cos(this.pitch),
-    );
-    this.right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+    this.view.updateDirections();
     this.grenadeSystem.update(dt);
     this._updateCamera(dt);
     this.weapon.animate(dt, this._weaponState(false, false, 0));
@@ -500,26 +505,14 @@ export class Player {
   }
 
   _updateLook(dt) {
-    const inp = this.ctx.input;
-
-    const lookMul = this._aiming ? (this.weapon.scope ? 0.38 : 0.62) : 1;
-    this.yaw += inp.look.x * lookMul;
-    this.pitch = clamp(this.pitch + inp.look.y * lookMul, -1.5, 1.5);
-    this.forward.set(
-      -Math.sin(this.yaw) * Math.cos(this.pitch),
-      Math.sin(this.pitch),
-      -Math.cos(this.yaw) * Math.cos(this.pitch),
-    );
-    this.right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+    this.view.look(this.ctx.input.look, this._aiming, !!this.weapon.scope);
     if (this.locomotion.freezeIfLocked()) {
       this._updateCamera(dt);
       this.weapon.animate(dt, this._weaponState(false, false, 0));
       return true;
     }
-
     return false;
   }
-
   _recoverMovement(dt, sprinting) {
     const b = this.body;
 
@@ -534,16 +527,7 @@ export class Player {
     // the grapple runs on breath: hanging drains it, feet on the ground bring it back fast
     this.grappleSystem.recover(dt);
     const hs2 = Math.hypot(b.vel.x, b.vel.z);
-    const moving = b.onGround && hs2 > 0.6 && !this.sliding;
-    this.bobAmt = damp(this.bobAmt, moving ? clamp(hs2 / 7, 0.3, 1.4) : 0, 8, dt);
-    if (moving) {
-      this.bobPhase += dt * (7 + hs2 * 0.5);
-      this.stepDist += hs2 * dt;
-      if (this.stepDist > (sprinting ? 2.5 : 2.0)) {
-        this.stepDist = 0;
-        this.ctx.audio.footstep(clamp(hs2 / 8, 0.3, 1));
-      }
-    }
+    this.view.updateStride(dt, sprinting, this.sliding);
     this._updateCamera(dt);
 
     return hs2;
@@ -594,57 +578,11 @@ export class Player {
       sliding: this.sliding,
       lookDelta: inp.look,
       strafe: this._mv.x,
-      bobPhase: this.bobPhase,
-      bobAmt: this.bobAmt,
-      landDip: clamp(-this.landDip.value * 0.08, -0.5, 0.5),
+      bobPhase: this.view.bobPhase,
+      bobAmt: this.view.bobAmt,
+      landDip: clamp(-this.view.landDipValue * 0.08, -0.5, 0.5),
       slideTilt: this.sliding ? 1 : 0,
       blockFire: !this.alive,
     };
-  }
-
-  _updateCamera(dt) {
-    const b = this.body,
-      cam = this.camera,
-      mv = this._mv;
-    const targetEye = this.crouching ? EYE_CROUCH : EYE_STAND;
-    this.eyeH = this.alive ? damp(this.eyeH, targetEye, 14, dt) : this.eyeH;
-    this.recoilPitch.update(dt);
-    this.recoilYaw.update(dt);
-    this.fovKick.update(dt);
-    this.landDip.update(dt);
-    if (this.alive) this.roll = damp(this.roll, -mv.x * 0.022 + (this.sliding ? -0.08 : 0), 9, dt);
-    const sh = this.ctx.effects.shakeAmt;
-    this.ctx.effects.shakeAmt = damp(sh, 0, 7, dt);
-    const shk = Math.min(sh, 1.2);
-    const bobY = Math.abs(Math.sin(this.bobPhase)) * 0.03 * this.bobAmt,
-      bobX = Math.cos(this.bobPhase * 0.5) * 0.018 * this.bobAmt;
-    this.eye.set(b.pos.x, b.pos.y + this.eyeH + this.landDip.value * 0.07 + bobY, b.pos.z);
-    this.center.set(b.pos.x, b.pos.y + b.height * 0.55, b.pos.z);
-    cam.position
-      .copy(this.eye)
-      .addScaledVector(this.right, bobX + (Math.random() - 0.5) * shk * 0.07);
-    cam.position.y += (Math.random() - 0.5) * shk * 0.07;
-    cam.rotation.set(
-      this.pitch + this.recoilPitch.value + (Math.random() - 0.5) * shk * 0.035,
-      this.yaw + this.recoilYaw.value + (Math.random() - 0.5) * shk * 0.035,
-      this.roll + Math.sin(this.bobPhase * 0.5) * 0.004 * this.bobAmt,
-    );
-    const sp3 = b.vel.length();
-    let fov =
-      82 +
-      clamp((sp3 - 7) / 16, 0, 1) * 8 +
-      (this._sprinting ? 3 : 0) +
-      (this.sliding ? 4 : 0) +
-      (this.grapple.state === 'on' ? 3 : 0) +
-      this.fovKick.value;
-    if (this._aiming) fov = this.weapon.adsFov;
-    this.fov = damp(this.fov, fov, this._aiming ? 16 : 8, dt);
-    if (Math.abs(cam.fov - this.fov) > 0.01) {
-      cam.fov = this.fov;
-      cam.updateProjectionMatrix();
-    }
-    this.hurtFx = damp(this.hurtFx, 0, 3, dt);
-    this.flashFx = damp(this.flashFx, 0, 10, dt);
-    this.speed = sp3;
   }
 }
