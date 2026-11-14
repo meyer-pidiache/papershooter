@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect, it, vi } from 'vitest';
 import { applicationFixture } from '../support/application.js';
 import { Rifle, Shotgun, Sniper, Revolver, Katana } from '../../src/gameplay/weapons.js';
@@ -42,9 +42,9 @@ function frame(weapon) {
   };
 }
 
-it.each([Rifle, Shotgun, Sniper, Revolver, Katana])(
+it.each([Rifle, Shotgun, Sniper, Revolver, Katana].map((Weapon) => [Weapon.name, Weapon]))(
   'preserves %s geometry and animation through its action cycle',
-  (Weapon) => {
+  (_name, Weapon) => {
     vi.useFakeTimers();
     const fixture = applicationFixture();
     try {
@@ -101,6 +101,16 @@ it.each([Rifle, Shotgun, Sniper, Revolver, Katana])(
         geometry: shape,
         animation: createHash('sha256').update(JSON.stringify(frames)).digest('hex'),
       };
+      if (
+        process.env.DUMP_WEAPON_TRACE === '1' ||
+        fingerprint.animation !== baseline[weapon.kind]?.animation
+      ) {
+        mkdirSync('reports', { recursive: true });
+        writeFileSync(
+          `reports/weapon-${weapon.kind}-trace.json`,
+          JSON.stringify({ fingerprint, frames }),
+        );
+      }
       if (process.env.RECORD_WEAPON_BASELINE === '1') {
         const path = 'tests/fixtures/weapons-baseline.json',
           saved = JSON.parse(readFileSync(path, 'utf8'));
