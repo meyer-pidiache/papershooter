@@ -1,3 +1,4 @@
+import { Locomotion } from './player/locomotion.js';
 import { Grapple } from './player/grapple.js';
 import { GrappleVisuals } from '../presentation/grapple.js';
 import { Grenades } from './player/grenades.js';
@@ -10,24 +11,12 @@ import { Rifle, Shotgun, Sniper, Katana } from './weapons.js';
 const PARRY_WINDOW = 0.55;
 import { clamp, damp, rand, Spring } from '../engine/math.js';
 
-const G = 26,
-  WALK = 6.6,
-  SPRINT = 10.6,
-  CROUCH = 3.6,
-  ACCEL = 140,
-  FRICTION = 8,
-  AIR_ACCEL = 36,
-  AIR_CAP = 7.5,
-  JUMP = 9.6;
+const G = 26;
 const STAND_H = 1.75,
-  CROUCH_H = 1.05,
   EYE_STAND = 1.6,
   EYE_CROUCH = 0.88;
 const _v = new THREE.Vector3(),
-  _v2 = new THREE.Vector3(),
-  _fwd = new THREE.Vector3(),
-  _right = new THREE.Vector3(),
-  _down = new THREE.Vector3(0, -1, 0);
+  _v2 = new THREE.Vector3();
 
 export class Player {
   constructor(ctx) {
@@ -75,29 +64,9 @@ export class Player {
     this.bobAmt = 0;
     this.stepDist = 0;
     this.eyeH = EYE_STAND;
-    this.crouching = false;
-    this.sliding = false;
-    this.slideT = 0;
-    this.coyote = 0;
-    this.jumpBuffer = 0;
-    this.wallTouch = 9;
-    this.wallN = new THREE.Vector3();
-    this.wallJumpCd = 0;
-    this.mantleCd = 0;
-    this.dashCd = 0;
-    this.airJumps = 1;
     this.blockCd = 0;
-    this.landGraceT = 0;
-    this.sprintToggle = false;
-    this.lastGround = true;
-    this.airT = 0;
-    this._sprinting = false;
-    this._aiming = false;
-    this._mv = { x: 0, y: 0 };
 
     this.deathT = 0;
-    this.gravityScale = 1;
-    this.dashLock = false;
     this.isLocal = true;
     this.team = 0;
     this.name = 'you';
@@ -174,6 +143,63 @@ export class Player {
         exhausted: () => ctx.hud.tip('out of breath · land to recover', 1.4),
       },
     );
+    this.locomotion = new Locomotion(
+      this.body,
+      { center: this.center, right: this.right },
+      { world: ctx.world, spawnPoint: () => ctx.level.playerStart },
+      this.grappleSystem,
+      {
+        jump: () => {
+          ctx.audio.jump();
+          this.landDip.kick(-1.2);
+        },
+        wallJump: (roll) => {
+          ctx.audio.wallJump();
+          this.roll += roll;
+          this.kickFov(2);
+          this.landDip.kick(-1.5);
+        },
+        airJump: () => {
+          ctx.audio.jump();
+          this.kickFov(1.6);
+          this.landDip.kick(-1.4);
+          _v2.copy(this.center);
+          _v2.y -= 0.7;
+          ctx.effects.strokeBurst(_v2, INK.BLUE, 9, 4.5, { life: 0.28, size: 0.028, gravity: -2 });
+        },
+        slide: () => {
+          ctx.audio.slide();
+          this.kickFov(2.5);
+          this.landDip.kick(-2.5);
+        },
+        dash: (direction) => {
+          ctx.audio.dash();
+          this.kickFov(4);
+          ctx.input.rumble(0.3, 0.6, 70);
+          this.roll += (direction.x * this.right.x + direction.z * this.right.z) * 0.08;
+          _v2.copy(this.center).addScaledVector(direction, -0.6);
+          ctx.effects.strokeBurst(_v2, INK.BLUE, 10, 5, { life: 0.25, size: 0.03 });
+        },
+        mantle: () => {
+          ctx.audio.mantle();
+          this.landDip.kick(-2.5);
+          this.kickFov(1.5);
+        },
+        land: (impact) => {
+          this.landDip.kick(-impact * 6 - 0.5);
+          ctx.audio.land(impact);
+          if (impact > 0.8) {
+            ctx.effects.shakeAmt += impact * 0.15;
+            ctx.input.rumble(impact * 0.4, 0.2, 80);
+          }
+        },
+        fell: () => {
+          this.takeDamage(20, null);
+          if (this.onFall) this.onFall();
+          ctx.hud.message('OFF THE PAGE', 'redrawn at the start', 1.8);
+        },
+      },
+    );
   }
   reset(pos) {
     this.grenadeSystem.cancelCharge();
@@ -190,14 +216,9 @@ export class Player {
     this.roll = 0;
     this.hurtFx = 0;
     this.flashFx = 0;
-    this.crouching = false;
-    this.sliding = false;
     this.deathT = 0;
     this.lastDamageT = 10;
-    this.dashCd = 0;
-    this.airJumps = 1;
-    this.gravityScale = 1;
-    this.dashLock = false;
+    this.locomotion.reset();
     this.grappleSystem.reset();
     for (const w of this.weapons)
       if (w.isGun) {
@@ -212,6 +233,39 @@ export class Player {
     this.grenadeSystem.reset();
   }
 
+  get crouching() {
+    return this.locomotion.crouching;
+  }
+  set crouching(value) {
+    this.locomotion.crouching = value;
+  }
+  get sliding() {
+    return this.locomotion.sliding;
+  }
+  get airJumps() {
+    return this.locomotion.jumps.airJumps;
+  }
+  get gravityScale() {
+    return this.locomotion.gravityScale;
+  }
+  set gravityScale(value) {
+    this.locomotion.gravityScale = value;
+  }
+  get dashLock() {
+    return this.locomotion.dashLock;
+  }
+  set dashLock(value) {
+    this.locomotion.dashLock = value;
+  }
+  get _aiming() {
+    return this.locomotion.aiming;
+  }
+  get _sprinting() {
+    return this.locomotion.sprinting;
+  }
+  get _mv() {
+    return this.locomotion.frame.mv;
+  }
   get grapple() {
     return this.grappleSystem.state;
   }
@@ -405,10 +459,11 @@ export class Player {
     }
     this.rig.visible = true;
     if (this._updateLook(dt)) return;
-    const motion = this._readMovement(dt);
-    this._accelerate(dt, motion);
-    this._updateJump(dt, motion);
-    this._integrateMovement(dt, motion);
+    const motion = this.locomotion.read(dt, this.ctx.input, this.yaw, !!this.weapon.isGun);
+    this.blockCd -= dt;
+    this.locomotion.accelerate(dt, motion);
+    this.locomotion.jump(dt, this.ctx.input, motion);
+    this.locomotion.integrate(dt, this.ctx.input, motion);
     const speed = this._recoverMovement(dt, motion.sprinting);
     this.grenadeSystem.updateInput(
       dt,
@@ -445,8 +500,7 @@ export class Player {
   }
 
   _updateLook(dt) {
-    const inp = this.ctx.input,
-      b = this.body;
+    const inp = this.ctx.input;
 
     const lookMul = this._aiming ? (this.weapon.scope ? 0.38 : 0.62) : 1;
     this.yaw += inp.look.x * lookMul;
@@ -456,243 +510,14 @@ export class Player {
       Math.sin(this.pitch),
       -Math.cos(this.yaw) * Math.cos(this.pitch),
     );
-    _fwd.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
-    _right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-    this.right.copy(_right);
-    if (this.dashLock) {
-      // the focus dash is sprinting the body across the level itself; don't fight it with gravity
-      b.vel.set(0, 0, 0);
-      b.onGround = false;
-      this.coyote = 0.13;
+    this.right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+    if (this.locomotion.freezeIfLocked()) {
       this._updateCamera(dt);
       this.weapon.animate(dt, this._weaponState(false, false, 0));
       return true;
     }
 
     return false;
-  }
-
-  _readMovement(dt) {
-    const ctx = this.ctx,
-      inp = ctx.input,
-      b = this.body;
-
-    const mv = inp.move;
-    this._mv = mv;
-    const wish = _v.set(0, 0, 0).addScaledVector(_fwd, mv.y).addScaledVector(_right, mv.x);
-    let wishLen = wish.length();
-    if (wishLen > 1e-4) wish.divideScalar(wishLen);
-    wishLen = Math.min(1, wishLen);
-    if (inp.usingGamepad) {
-      if (inp.pressed('sprint')) this.sprintToggle = !this.sprintToggle;
-      if (mv.y < 0.1) this.sprintToggle = false;
-    } else this.sprintToggle = inp.down('sprint');
-    const aiming = (this._aiming = inp.down('aim') && this.weapon.isGun);
-    const hspeed = Math.hypot(b.vel.x, b.vel.z);
-    const crouchDown = inp.down('crouch');
-    if (inp.pressed('crouch') && b.onGround && hspeed > 6.3 && !this.sliding)
-      this._startSlide(hspeed);
-    if (this.sliding) {
-      this.slideT += dt;
-      if (!crouchDown || hspeed < 3.5 || this.airT > 0.35) this.sliding = false;
-    }
-    let wantCrouch = (crouchDown && b.onGround) || this.sliding;
-    if (!wantCrouch && this.crouching) {
-      b.height = STAND_H;
-      if (ctx.world.overlapsBody(b)) wantCrouch = true;
-    }
-    this.crouching = wantCrouch;
-    b.height = this.crouching ? CROUCH_H : STAND_H;
-    const sprinting = (this._sprinting =
-      this.sprintToggle && mv.y > 0.1 && !this.crouching && !aiming);
-    const maxSpeed = this.crouching && !this.sliding ? CROUCH : sprinting ? SPRINT : WALK;
-    this.landGraceT -= dt;
-    this.dashCd -= dt;
-    this.blockCd -= dt;
-
-    const motion = (this._motion ??= {});
-    motion.mv = mv;
-    motion.wish = wish;
-    motion.wishLen = wishLen;
-    motion.aiming = aiming;
-    motion.hspeed = hspeed;
-    motion.sprinting = sprinting;
-    motion.maxSpeed = maxSpeed;
-    return motion;
-  }
-
-  _accelerate(dt, motion) {
-    const b = this.body;
-    const { hspeed, wish, wishLen, maxSpeed } = motion;
-
-    if (b.onGround) {
-      this.coyote = 0.13;
-      this.airT = 0;
-      this.airJumps = 1;
-      if (this.sliding) {
-        const sp = hspeed;
-        if (sp > 0) {
-          const ns = Math.max(0, sp - 6.5 * dt) / sp;
-          b.vel.x *= ns;
-          b.vel.z *= ns;
-        }
-        if (wishLen > 0) {
-          b.vel.x += wish.x * 6 * dt;
-          b.vel.z += wish.z * 6 * dt;
-          const n2 = Math.hypot(b.vel.x, b.vel.z);
-          if (n2 > sp && n2 > 0) {
-            b.vel.x *= sp / n2;
-            b.vel.z *= sp / n2;
-          }
-        }
-      } else {
-        const fr = FRICTION * (this.landGraceT > 0 ? 0.25 : 1);
-        const sp = hspeed;
-        if (sp > 0) {
-          const ns = Math.max(0, sp - sp * fr * dt) / sp;
-          b.vel.x *= ns;
-          b.vel.z *= ns;
-        }
-        if (wishLen > 0) {
-          const cur = b.vel.x * wish.x + b.vel.z * wish.z;
-          const add = Math.min(maxSpeed * wishLen - cur, ACCEL * dt);
-          if (add > 0) {
-            b.vel.x += wish.x * add;
-            b.vel.z += wish.z * add;
-          }
-        }
-      }
-    } else {
-      this.coyote -= dt;
-      this.airT += dt;
-      if (wishLen > 0) {
-        const cur = b.vel.x * wish.x + b.vel.z * wish.z;
-        const add = Math.min(AIR_CAP * wishLen - cur, AIR_ACCEL * dt);
-        if (add > 0) {
-          b.vel.x += wish.x * add;
-          b.vel.z += wish.z * add;
-        }
-      }
-    }
-  }
-
-  _updateJump(dt, motion) {
-    const inp = this.ctx.input,
-      b = this.body;
-    const { wish, wishLen } = motion;
-
-    if (inp.pressed('jump')) this.jumpBuffer = 0.15;
-    else this.jumpBuffer -= dt;
-    this.wallJumpCd -= dt;
-    this.mantleCd -= dt;
-    if (b.hitWall && !b.onGround) {
-      this.wallTouch = 0;
-      this.wallN.copy(b.wallNormal);
-    } else this.wallTouch += dt;
-    if (this.jumpBuffer > 0) {
-      if (this.grapple.state === 'on') {
-        this.jumpBuffer = 0;
-        this.detachGrapple(true);
-      } else if (b.onGround || this.coyote > 0) {
-        this.jumpBuffer = 0;
-        this.coyote = 0;
-        b.vel.y = JUMP;
-        b.onGround = false;
-        this.airJumps = 1;
-        if (this.sliding) {
-          b.vel.x *= 1.06;
-          b.vel.z *= 1.06;
-          this.sliding = false;
-        }
-        this.ctx.audio.jump();
-        this.landDip.kick(-1.2);
-      } else if (this.wallTouch < 0.12 && this.wallJumpCd <= 0 && b.vel.y < 7) {
-        this.jumpBuffer = 0;
-        this.wallJumpCd = 0.35;
-        const n = this.wallN;
-        b.vel.x = n.x * 7.5 + b.vel.x * 0.35 + _fwd.x * 2.5;
-        b.vel.z = n.z * 7.5 + b.vel.z * 0.35 + _fwd.z * 2.5;
-        b.vel.y = 9.2;
-        this.ctx.audio.wallJump();
-        this.roll += n.dot(_right) > 0 ? -0.1 : 0.1;
-        this.kickFov(2);
-        this.landDip.kick(-1.5);
-        this.airJumps = 1;
-      } else if (this.airJumps > 0) {
-        // double jump: a second beat of height, and it redirects toward where you are steering
-        this.jumpBuffer = 0;
-        this.airJumps--;
-        b.vel.y = JUMP * 0.92;
-        if (wishLen > 0) {
-          const cur = b.vel.x * wish.x + b.vel.z * wish.z;
-          const add = Math.max(0, 7.5 * wishLen - cur);
-          b.vel.x += wish.x * add;
-          b.vel.z += wish.z * add;
-        }
-        this.ctx.audio.jump();
-        this.kickFov(1.6);
-        this.landDip.kick(-1.4);
-        _v2.copy(this.center);
-        _v2.y -= 0.7;
-        this.ctx.effects.strokeBurst(_v2, INK.BLUE, 9, 4.5, {
-          life: 0.28,
-          size: 0.028,
-          gravity: -2,
-        });
-      }
-    }
-    if (
-      (inp.pressed('dash') || (inp.pressed('crouch') && !b.onGround)) &&
-      !b.onGround &&
-      this.dashCd <= 0 &&
-      this.grapple.state !== 'on'
-    )
-      this._dash(wishLen > 0 ? wish : _fwd);
-  }
-
-  _integrateMovement(dt, motion) {
-    const ctx = this.ctx,
-      b = this.body;
-    const { mv } = motion;
-
-    b.vel.y -= G * this.gravityScale * (this.grapple.state === 'on' ? 0.88 : 1) * dt;
-    this.grappleSystem.update(
-      dt,
-      ctx.input.pressed('grapple'),
-      ctx.input.down('grapple'),
-      this._mv.y,
-    );
-    if (
-      !b.onGround &&
-      this.mantleCd <= 0 &&
-      mv.y > 0.3 &&
-      b.vel.y < 8 &&
-      this.grapple.state !== 'on'
-    )
-      this._tryMantle(_fwd);
-    b.noSnap = this.grapple.state === 'on' || b.vel.y > 0.5;
-    const spd = b.vel.length();
-    if (spd > 48) b.vel.multiplyScalar(48 / spd);
-    ctx.world.moveBody(b, dt);
-    if (b.pos.y < -12 || Math.abs(b.pos.x) > 95 || Math.abs(b.pos.z) > 95) {
-      this.detachGrapple(false);
-      b.pos.copy(ctx.level.playerStart);
-      b.vel.set(0, 0, 0);
-      this.takeDamage(20, null);
-      if (this.onFall) this.onFall();
-      ctx.hud.message('OFF THE PAGE', 'redrawn at the start', 1.8);
-    }
-    if (b.onGround && !this.lastGround) {
-      const impact = clamp(-b.landVel / 14, 0, 1.5);
-      this.landDip.kick(-impact * 6 - 0.5);
-      this.ctx.audio.land(impact);
-      if (impact > 0.8) {
-        ctx.effects.shakeAmt += impact * 0.15;
-        ctx.input.rumble(impact * 0.4, 0.2, 80);
-      }
-      if (Math.hypot(b.vel.x, b.vel.z) > 9) this.landGraceT = 0.4;
-    }
-    this.lastGround = b.onGround;
   }
 
   _recoverMovement(dt, sprinting) {
@@ -753,8 +578,6 @@ export class Player {
     ctx.hud.setAds(this.weapon.isGun && this.weapon.aimAmt > 0.55);
     ctx.hud.setScope(!!this.weapon.scope && this.weapon.aimAmt > 0.62);
   }
-  // ---- grenades: a lobbed ink bomb with a short fuse and a big orange blast ----
-  // where a throw starts and how fast it leaves, for a given charge (0 = flick, 1 = full wind-up)
 
   _weaponState(sprinting, aiming, hs) {
     const inp = this.ctx.input,
@@ -778,62 +601,6 @@ export class Player {
       blockFire: !this.alive,
     };
   }
-  _startSlide(hs) {
-    this.sliding = true;
-    this.slideT = 0;
-    const b = this.body;
-    const boost = clamp(12.8 - hs, 0, 4.5);
-    b.vel.x += (b.vel.x / hs) * boost;
-    b.vel.z += (b.vel.z / hs) * boost;
-    this.ctx.audio.slide();
-    this.kickFov(2.5);
-    this.landDip.kick(-2.5);
-  }
-  _dash(dir) {
-    const b = this.body;
-    this.dashCd = 1.3;
-    const cur = b.vel.x * dir.x + b.vel.z * dir.z;
-    const target = Math.max(cur + 6, 14);
-    b.vel.x += dir.x * (target - cur);
-    b.vel.z += dir.z * (target - cur);
-    b.vel.y = Math.max(b.vel.y, 2);
-    this.ctx.audio.dash();
-    this.kickFov(4);
-    this.ctx.input.rumble(0.3, 0.6, 70);
-    this.roll += (dir.x * this.right.x + dir.z * this.right.z) * 0.08;
-    _v2.copy(this.center).addScaledVector(dir, -0.6);
-    this.ctx.effects.strokeBurst(_v2, INK.BLUE, 10, 5, { life: 0.25, size: 0.03 });
-  }
-  _tryMantle(fwd) {
-    const b = this.body,
-      world = this.ctx.world;
-    _v2.set(b.pos.x, b.pos.y + 1.0, b.pos.z);
-    if (!world.raycast(_v2, fwd, 0.95)) return;
-    _v2.set(b.pos.x + fwd.x * 0.95, b.pos.y + 2.75, b.pos.z + fwd.z * 0.95);
-    const top = world.raycast(_v2, _down, 2.25);
-    if (!top || top.normal.y < 0.5) return;
-    const dy = top.point.y - b.pos.y;
-    if (dy < 0.5 || dy > 2.4) return;
-    const hw = b.halfW;
-    if (
-      world.overlapsAABB(
-        { x: _v2.x - hw, y: top.point.y + 0.08, z: _v2.z - hw },
-        { x: _v2.x + hw, y: top.point.y + CROUCH_H, z: _v2.z + hw },
-      )
-    )
-      return;
-    b.vel.y = Math.min(11, Math.sqrt(2 * G * (dy + 0.45)));
-    b.vel.x = fwd.x * 3.2;
-    b.vel.z = fwd.z * 3.2;
-    this.mantleCd = 0.7;
-    this.ctx.audio.mantle();
-    this.landDip.kick(-2.5);
-    this.kickFov(1.5);
-  }
-
-  // What the crosshair is on wins. Enemies and rings only get a small amount of assist, and
-  // only when they are genuinely near the aim line and not behind whatever you are pointing at,
-  // so the hook stops jumping to rings above your head that you never aimed at.
 
   _updateCamera(dt) {
     const b = this.body,

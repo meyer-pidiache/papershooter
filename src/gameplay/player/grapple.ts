@@ -41,6 +41,9 @@ export class Grapple {
     private readonly view: GrappleVisualPort,
     private readonly feedback: GrappleFeedback,
   ) {}
+  get mode() {
+    return this.state.state;
+  }
   reset() {
     this.stamina = 1;
     this.detach(false);
