@@ -13,7 +13,6 @@ const STAM_FIRE = 0.09,
   STAM_PAUSE = 0.5,
   PARRY_WINDOW = 0.55;
 import { clamp, damp, rand, Spring, alignYAxis } from '../engine/math.js';
-import { audio } from '../presentation/audio.js';
 
 const G = 26,
   WALK = 6.6,
@@ -220,7 +219,7 @@ export class Player {
       b.vel.y = Math.max(b.vel.y, 2.5);
       b.onGround = false;
     }
-    audio.dash();
+    this.ctx.audio.dash();
     this.kickFov(3);
   }
   switchTo(i, silent = false) {
@@ -231,7 +230,7 @@ export class Player {
     this.weaponIndex = i;
     this.weapon = this.weapons[i];
     this.weapon.equip();
-    if (!silent) audio.switchWeapon();
+    if (!silent) this.ctx.audio.switchWeapon();
     this.ctx.hud.setWeapon(this.weapon.name, this.weapon.hint);
     this.ctx.hud.setCrosshairMode(this.weapon.kind === 'katana' ? 'katana' : '');
   }
@@ -244,7 +243,7 @@ export class Player {
     this.lastDamageT = 0;
     this.hurtFx = Math.min(1, this.hurtFx + amount / 40);
     this.ctx.effects.shakeAmt += 0.2 + amount / 80;
-    audio.hurt();
+    this.ctx.audio.hurt();
     this.ctx.input.rumble(0.8, 0.5, 160);
     if (fromPos) {
       _v.subVectors(fromPos, this.eye);
@@ -279,8 +278,8 @@ export class Player {
     const ret = perfect || Math.random() < 0.35;
     this.blockCd = 0.19; // the blade has to come back before the next parry
     this.weapon.onDeflect(perfect);
-    if (perfect) audio.perfectParry();
-    else audio.parry();
+    if (perfect) this.ctx.audio.perfectParry();
+    else this.ctx.audio.parry();
     ctx.effects.sparks(
       proj.pos,
       _v2.copy(proj.vel).normalize().negate(),
@@ -304,7 +303,7 @@ export class Player {
     _v.subVectors(e.center, this.eye).normalize();
     if (_v.dot(this.forward) < 0.35) return false;
     this.weapon.onDeflect(true);
-    audio.parry();
+    this.ctx.audio.parry();
     this.ctx.game.hitstop(0.06, 0.15);
     this.ctx.effects.sparks(
       _v2.copy(this.eye).addScaledVector(this.forward, 0.8),
@@ -320,7 +319,7 @@ export class Player {
   die() {
     this.alive = false;
     this.deathT = 0;
-    audio.death();
+    this.ctx.audio.death();
     this.detachGrapple(false);
     this.ctx.game.onPlayerDeath();
   }
@@ -357,7 +356,8 @@ export class Player {
   }
 
   _updateDead(dt) {
-    const ctx = this.ctx, b = this.body;
+    const ctx = this.ctx,
+      b = this.body;
 
     this.deathT += dt;
     this.eyeH = damp(this.eyeH, 0.35, 3, dt);
@@ -380,7 +380,8 @@ export class Player {
   }
 
   _updateLook(dt) {
-    const inp = this.ctx.input, b = this.body;
+    const inp = this.ctx.input,
+      b = this.body;
 
     const lookMul = this._aiming ? (this.weapon.scope ? 0.38 : 0.62) : 1;
     this.yaw += inp.look.x * lookMul;
@@ -511,7 +512,8 @@ export class Player {
   }
 
   _updateJump(dt, motion) {
-    const inp = this.ctx.input, b = this.body;
+    const inp = this.ctx.input,
+      b = this.body;
     const { wish, wishLen } = motion;
 
     if (inp.pressed('jump')) this.jumpBuffer = 0.15;
@@ -537,7 +539,7 @@ export class Player {
           b.vel.z *= 1.06;
           this.sliding = false;
         }
-        audio.jump();
+        this.ctx.audio.jump();
         this.landDip.kick(-1.2);
       } else if (this.wallTouch < 0.12 && this.wallJumpCd <= 0 && b.vel.y < 7) {
         this.jumpBuffer = 0;
@@ -546,7 +548,7 @@ export class Player {
         b.vel.x = n.x * 7.5 + b.vel.x * 0.35 + _fwd.x * 2.5;
         b.vel.z = n.z * 7.5 + b.vel.z * 0.35 + _fwd.z * 2.5;
         b.vel.y = 9.2;
-        audio.wallJump();
+        this.ctx.audio.wallJump();
         this.roll += n.dot(_right) > 0 ? -0.1 : 0.1;
         this.kickFov(2);
         this.landDip.kick(-1.5);
@@ -562,7 +564,7 @@ export class Player {
           b.vel.x += wish.x * add;
           b.vel.z += wish.z * add;
         }
-        audio.jump();
+        this.ctx.audio.jump();
         this.kickFov(1.6);
         this.landDip.kick(-1.4);
         _v2.copy(this.center);
@@ -584,7 +586,8 @@ export class Player {
   }
 
   _integrateMovement(dt, motion) {
-    const ctx = this.ctx, b = this.body;
+    const ctx = this.ctx,
+      b = this.body;
     const { mv } = motion;
 
     b.vel.y -= G * this.gravityScale * (this.grapple.state === 'on' ? 0.88 : 1) * dt;
@@ -612,7 +615,7 @@ export class Player {
     if (b.onGround && !this.lastGround) {
       const impact = clamp(-b.landVel / 14, 0, 1.5);
       this.landDip.kick(-impact * 6 - 0.5);
-      audio.land(impact);
+      this.ctx.audio.land(impact);
       if (impact > 0.8) {
         ctx.effects.shakeAmt += impact * 0.15;
         ctx.input.rumble(impact * 0.4, 0.2, 80);
@@ -623,7 +626,8 @@ export class Player {
   }
 
   _recoverMovement(dt, sprinting) {
-    const ctx = this.ctx, b = this.body;
+    const ctx = this.ctx,
+      b = this.body;
 
     if (
       this.lastDamageT > this.regenDelay &&
@@ -650,7 +654,7 @@ export class Player {
       this.stepDist += hs2 * dt;
       if (this.stepDist > (sprinting ? 2.5 : 2.0)) {
         this.stepDist = 0;
-        audio.footstep(clamp(hs2 / 8, 0.3, 1));
+        this.ctx.audio.footstep(clamp(hs2 / 8, 0.3, 1));
       }
     }
     this._updateCamera(dt);
@@ -682,7 +686,8 @@ export class Player {
   }
 
   _updateWeaponInput(dt, sprinting, aiming, hs2) {
-    const ctx = this.ctx, inp = ctx.input;
+    const ctx = this.ctx,
+      inp = ctx.input;
 
     for (let i = 0; i < 5; i++)
       if (inp.pressed('slot' + (i + 1))) this.switchTo(Math.min(i, this.weapons.length - 1));
@@ -734,7 +739,7 @@ export class Player {
       this._nadeLaunch(charge, pos, vel);
       this.weapon.recoil.kick(-0.4, 0.5, 1.2);
       this.weapon.recoilRot.kick(-3, 0, -1.5);
-      audio.grappleFire();
+      this.ctx.audio.grappleFire();
       ctx.input.rumble(0.2, 0.4, 50);
       if (this.onThrow)
         this.onThrow({
@@ -860,7 +865,7 @@ export class Player {
               n.vel.addScaledVector(hit.normal, -1.45 * vn);
               n.vel.multiplyScalar(0.55);
               n.ang.multiplyScalar(0.6);
-              audio.shell();
+              this.ctx.audio.shell();
             }
             if (n.vel.length() < 1.2 && hit.normal.y > 0.5) {
               n.rest = true;
@@ -895,7 +900,7 @@ export class Player {
       c = n.pos.clone();
     c.y += 0.25;
     ctx.effects.boom(c, R);
-    audio.explosion(c);
+    this.ctx.audio.explosion(c);
     ctx.input.rumble(0.9, 0.9, 220);
     // bots: the thrower's client reports the damage (host applies it; a client's report is forwarded)
     if (n.mine) ctx.enemies.blastEnemies(c, R, 120, null);
@@ -943,7 +948,7 @@ export class Player {
     const boost = clamp(12.8 - hs, 0, 4.5);
     b.vel.x += (b.vel.x / hs) * boost;
     b.vel.z += (b.vel.z / hs) * boost;
-    audio.slide();
+    this.ctx.audio.slide();
     this.kickFov(2.5);
     this.landDip.kick(-2.5);
   }
@@ -955,7 +960,7 @@ export class Player {
     b.vel.x += dir.x * (target - cur);
     b.vel.z += dir.z * (target - cur);
     b.vel.y = Math.max(b.vel.y, 2);
-    audio.dash();
+    this.ctx.audio.dash();
     this.kickFov(4);
     this.ctx.input.rumble(0.3, 0.6, 70);
     this.roll += (dir.x * this.right.x + dir.z * this.right.z) * 0.08;
@@ -984,7 +989,7 @@ export class Player {
     b.vel.x = fwd.x * 3.2;
     b.vel.z = fwd.z * 3.2;
     this.mantleCd = 0.7;
-    audio.mantle();
+    this.ctx.audio.mantle();
     this.landDip.kick(-2.5);
     this.kickFov(1.5);
   }
@@ -1063,13 +1068,13 @@ export class Player {
   }
   _fireGrapple() {
     if (this.grapStam < STAM_MIN) {
-      audio.winded();
+      this.ctx.audio.winded();
       this.ctx.hud.tip('grapple needs a breather', 0.9);
       return;
     }
     const t = this._findGrappleTarget();
     if (!t) {
-      audio.empty();
+      this.ctx.audio.empty();
       return;
     }
     this.grapStam -= STAM_FIRE;
@@ -1084,7 +1089,7 @@ export class Player {
     g.enemy = t.enemy || null;
     g.mover = t.mover || null;
     g.t = 0;
-    audio.grappleFire();
+    this.ctx.audio.grappleFire();
     this.ctx.input.rumble(0.15, 0.4, 40);
     this.weapon.recoil.kick(-0.3, 0.2, 0.5);
   }
@@ -1099,7 +1104,7 @@ export class Player {
     this.stamPause = STAM_PAUSE;
     this.rope.visible = false;
     this.hookMesh.visible = false;
-    audio.reelLoop(false);
+    this.ctx.audio.reelLoop(false);
     this.ctx.hud.grappleTarget(0);
     if (was === 'on') {
       const b = this.body;
@@ -1107,11 +1112,11 @@ export class Player {
         b.vel.y = Math.max(b.vel.y, 0) + 8;
         b.vel.x *= 1.12;
         b.vel.z *= 1.12;
-        audio.jump();
+        this.ctx.audio.jump();
         this.kickFov(3);
       } else {
         b.vel.y += 2.5;
-        audio.grappleRelease();
+        this.ctx.audio.grappleRelease();
       }
     }
   }
@@ -1138,7 +1143,7 @@ export class Player {
           if (g.enemy.alive) {
             ctx.enemies.yank(g.enemy, this.center);
             ctx.game.addScore(30, 'YANKED');
-            audio.grappleHit();
+            this.ctx.audio.grappleHit();
             ctx.input.rumble(0.5, 0.5, 90);
           }
           this.detachGrapple(false);
@@ -1148,8 +1153,8 @@ export class Player {
           g.blockedT = 0;
           g.t = 0;
           g.swingT = 0;
-          audio.grappleHit();
-          audio.reelLoop(true);
+          this.ctx.audio.grappleHit();
+          this.ctx.audio.reelLoop(true);
           ctx.hud.grappleTarget(2);
           ctx.input.rumble(0.3, 0.6, 60);
           if (b.onGround) {

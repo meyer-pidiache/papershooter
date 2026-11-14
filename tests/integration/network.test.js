@@ -21,6 +21,38 @@ function setup() {
 }
 
 describe('PeerJS lobby transport', () => {
+  it('accepts canonical host authority when a late join targets its reclaimed alias', async () => {
+    vi.useFakeTimers();
+    const { client } = setup();
+    const host = client(),
+      guest = client();
+    await host.host({ code: 'ABCDE-1' });
+    host.claimAlias('ABCDE');
+    await vi.advanceTimersByTimeAsync(1501);
+    await guest.join('ABCDE');
+    await flushMessages();
+    expect(guest.hostId).toBe('test-ABCDE');
+    expect(guest.authorityId).toBe(host.id);
+    const end = vi.fn();
+    guest.onHost('end', end);
+    host.send('end', { id: host.id });
+    await flushMessages();
+    expect(end).toHaveBeenCalledOnce();
+  });
+  it('cancels a lobby whose configuration resolves after leaving', async () => {
+    const { Peer, peers } = peerNetwork();
+    let release;
+    const options = new Promise((resolve) => {
+      release = resolve;
+    });
+    const net = new Net({ PeerClass: Peer, options: () => options });
+    clients.push(net);
+    const hosting = net.host({ code: 'ABCDE' });
+    net.leave();
+    release({});
+    await expect(hosting).rejects.toThrow('cancelled');
+    expect(peers.size).toBe(0);
+  });
   it('hosts, joins, relays, sends direct messages and notifies disconnections', async () => {
     const { client } = setup();
     const host = client(),

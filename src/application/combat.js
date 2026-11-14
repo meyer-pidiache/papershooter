@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { INK } from '../presentation/renderer.js';
-import { audio } from '../presentation/audio.js';
 import { rand, clamp } from '../engine/math.js';
 
 export function createCombat(runtime, actions = {}) {
+  const audio = runtime.audio;
   const {
     ctx,
     player,

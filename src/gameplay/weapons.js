@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { makeInkMaterial, INK } from '../presentation/renderer.js';
 import { SEE_THROUGH } from '../engine/physics.js';
 import { rand, clamp, damp, lerp, Spring3, TAU } from '../engine/math.js';
-import { audio } from '../presentation/audio.js';
 
 const _v = new THREE.Vector3(),
   _v2 = new THREE.Vector3(),
@@ -113,9 +112,9 @@ export class Gun extends ViewModel {
     this.reloading = true;
     this.reloadT = 0;
     this.racked = false;
-    if (this.reloadType === 'shells') audio.shell();
-    else if (this.reloadType === 'cylinder') audio.cylinder();
-    else audio.reload();
+    if (this.reloadType === 'shells') this.ctx.audio.shell();
+    else if (this.reloadType === 'cylinder') this.ctx.audio.cylinder();
+    else this.ctx.audio.reload();
   }
   update(dt, st) {
     this.fireT -= dt;
@@ -147,7 +146,7 @@ export class Gun extends ViewModel {
       p.y -= s * 0.02;
       if (t > 0.45 && !this.pumped) {
         this.pumped = true;
-        audio.pump();
+        this.ctx.audio.pump();
         this._ejectShell();
         this.recoilRot.kick(-1.5, 0, 1);
       }
@@ -200,7 +199,7 @@ export class Gun extends ViewModel {
         if (t > 0.3 && !this.racked) {
           this.racked = true;
           for (let i = 0; i < 6; i++) this._ejectShell(0.7);
-          audio.shell();
+          this.ctx.audio.shell();
         }
         if (this.reloadT >= this.reloadDur) {
           const take = Math.min(this.magSize - this.mag, this.reserve);
@@ -230,7 +229,7 @@ export class Gun extends ViewModel {
           this.reloading = false;
           if (this.handL) this.handL.position.copy(this.handLPos);
           if (this.needPump) this.pumpT = this.cycleDur;
-        } else audio.shell();
+        } else this.ctx.audio.shell();
       }
     }
     if (
@@ -247,7 +246,7 @@ export class Gun extends ViewModel {
     if (wantFire && this.fireT <= 0 && this.pumpT <= 0 && !st.blockFire) {
       if (this.mag <= 0) {
         if (st.firePressed) {
-          audio.empty();
+          this.ctx.audio.empty();
           this.startReload();
         }
       } else {
@@ -296,7 +295,7 @@ export class Gun extends ViewModel {
       rand(-this.camKick[1], this.camKick[1]),
     );
     P.kickFov(this.fovKick);
-    audio[this.sound]();
+    this.ctx.audio[this.sound]();
     ctx.input.rumble(0.15 + this.fovKick * 0.08, 0.5, 40 + this.fovKick * 15);
     ctx.effects.shakeAmt += 0.02 + this.fovKick * 0.02;
     if (hits > 0 && this.kind === 'shotgun') ctx.game.hitstop(0.03, 0.3);
@@ -359,7 +358,7 @@ export class Gun extends ViewModel {
     } else if (hitW) {
       end = hitW.point;
       ctx.effects.bulletImpact(hitW.point, hitW.normal, INK.BLUE);
-      if (Math.random() < 0.25) audio.ricochet(hitW.point);
+      if (Math.random() < 0.25) this.ctx.audio.ricochet(hitW.point);
     } else end = origin.clone().addScaledVector(dir, 300);
     this.muzzle.getWorldPosition(_v);
     ctx.effects.tracer(_v, end, INK.BLUE, this.tracer, 0.05);
@@ -628,7 +627,7 @@ export class Katana extends ViewModel {
     this.combo++;
     this.comboT = 0.9;
     this.cooldown = this.slashDur + 0.06;
-    audio.katanaSwing();
+    this.ctx.audio.katanaSwing();
     this.ctx.player.kickFov(2);
     if (st.sprinting || !st.grounded) this.ctx.player.lunge(5.5);
     const P = this.ctx.player,
@@ -746,7 +745,7 @@ export class Katana extends ViewModel {
       }
     // a swing only cuts; bullets are turned aside by the raised guard, never by a slash
     if (any) {
-      audio.katanaHit();
+      this.ctx.audio.katanaHit();
       ctx.game.hitstop(0.07, 0.12);
       ctx.effects.shakeAmt += 0.12;
       ctx.input.rumble(0.7, 0.4, 90);

@@ -1,6 +1,5 @@
 import { createRuntime } from './runtime.js';
 import { disposeObjects } from '../engine/resources.js';
-import { audio } from '../presentation/audio.js';
 import { createPickups } from './pickups.js';
 import { createCombat } from './combat.js';
 import { createFocus } from './focus.js';
@@ -12,8 +11,10 @@ import { createControls } from './controls.js';
 import { createLoop } from './loop.js';
 
 // Callbacks connect controllers explicitly; factories register callbacks but do not start the loop.
-export function createApplication(options = {}) {
+/** @param {import('./contracts.js').ApplicationOptions} options */
+export function createApplication(options) {
   const runtime = createRuntime(options);
+  const audio = runtime.audio;
   const debug = {
     ...runtime,
     get level() {
@@ -134,8 +135,7 @@ export function createApplication(options = {}) {
     runtime.effects.clear();
     for (const remote of runtime.remote.values()) remote.dispose();
     runtime.remote.clear();
-    audio.musicOn(false);
-    audio.reelLoop(false);
+    audio.dispose();
     disposeObjects([...runtime.R.scene.children], runtime.R.scene);
     runtime.R.dispose?.();
     if (window.__game === debug) delete window.__game;

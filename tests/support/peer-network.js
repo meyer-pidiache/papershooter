@@ -10,11 +10,22 @@ export function peerNetwork() {
       this.peer = peer;
       this.metadata = metadata;
       this.open = false;
+      this.outbox = [];
+      this.scheduled = false;
     }
     send(packet) {
-      queueMicrotask(() => {
-        if (this.other?.open) this.other.emit('data', structuredClone(packet));
-      });
+      this.outbox.push(structuredClone(packet));
+      if (this.scheduled) return;
+      this.scheduled = true;
+      const deliver = () => {
+        const next = this.outbox.shift();
+        if (this.other?.open) this.other.emit('data', next);
+        // Yield between ordered packets, as separate WebRTC data events do. Promise continuations
+        // must be able to adopt a welcomed connection before the following lobby packet arrives.
+        if (this.outbox.length) queueMicrotask(deliver);
+        else this.scheduled = false;
+      };
+      queueMicrotask(deliver);
     }
     close() {
       if (!this.open) return;

@@ -1,10 +1,10 @@
 import { LEVELS } from '../maps/index.js';
 import { CONTROLS_HTML } from '../presentation/hud.js';
-import { audio } from '../presentation/audio.js';
 import { FFA_TARGET } from '../domain/match';
 import { escapeHtml as esc } from '../presentation/html';
 
 export function createScreens(runtime, actions = {}) {
+  const audio = runtime.audio;
   const {
     hud,
     applySettings,
@@ -128,7 +128,7 @@ export function createScreens(runtime, actions = {}) {
     const n = rows.length;
     return `<h1>LOBBY</h1><h2>free for all · first to ${FFA_TARGET} · ${n}/${net.maxPlayers} players</h2>
     <div class="online" id="online">
-      <div class="row"><span>code</span><span class="code">${String(net.isHost ? net.aliasCode || net.code : lobby.shown || net.code || '').replace(/-\d+$/, '')}</span></div>
+      <div class="row"><span>code</span><span class="code">${esc(String(net.isHost ? net.aliasCode || net.code : lobby.shown || net.code || '').replace(/-\d+$/, ''))}</span></div>
       ${mapHTML(lobby.map || runtime.state.mapKey, host)}
       <div class="hint">${lobby.isPublic ? 'this lobby is public: anyone can quick play in, or type the code' : 'private lobby: friends type this code under PLAY ONLINE → JOIN'}</div>
       <div class="plist">${rows.map((p) => `<div class="${p.id === lobby.hostId ? 'host' : ''}${p.id === net.id ? ' me' : ''}"><span>${esc(p.name)}</span><span>${p.id === net.id ? 'you' : ''}</span></div>`).join('')}</div>
@@ -145,7 +145,7 @@ export function createScreens(runtime, actions = {}) {
     return lobbyList
       .map(
         (l) =>
-          `<div class="lobbyrow"><span class="code">${esc(l.code)}</span><span>${esc(l.hostName || 'someone')}'s lobby</span><span>${l.players}/${l.max}${l.inMatch ? ' · in a match' : ''}</span>${l.full ? '<span class="status">full</span>' : `<button type="button" data-join="${esc(l.code)}">JOIN</button>`}</div>`,
+          `<div class="lobbyrow"><span class="code">${esc(l.code)}</span><span>${esc(l.hostName || 'someone')}'s lobby</span><span>${esc(l.players)}/${esc(l.max)}${l.inMatch ? ' · in a match' : ''}</span>${l.full ? '<span class="status">full</span>' : `<button type="button" data-join="${esc(l.code)}">JOIN</button>`}</div>`,
       )
       .join('');
   }
@@ -288,10 +288,10 @@ export function createScreens(runtime, actions = {}) {
   function showPause() {
     if (online()) {
       hud.showScreen(
-        `<h1>MENU</h1><h2>free for all · lobby ${String(net.aliasCode || net.code || '').replace(/-\d+$/, '')}</h2><div class="scoreboard">${sortedScores()
+        `<h1>MENU</h1><h2>free for all · lobby ${esc(String(net.aliasCode || net.code || '').replace(/-\d+$/, ''))}</h2><div class="scoreboard">${sortedScores()
           .map(
             ([id, s]) =>
-              `<div class="${id === net.id ? 'me' : ''}"><span>${esc(s.name)}</span><span>${s.kills} K · ${s.deaths} D</span></div>`,
+              `<div class="${id === net.id ? 'me' : ''}"><span>${esc(s.name)}</span><span>${esc(s.kills)} K · ${esc(s.deaths)} D</span></div>`,
           )
           .join(
             '',

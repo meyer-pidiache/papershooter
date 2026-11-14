@@ -1,4 +1,15 @@
 import { isRecord } from '../shared/ice.js';
+import { MAX_PLAYERS } from '../domain/match.js';
+
+export function lobbyCount(value: unknown, fallback = 0, min = 0): number {
+  return typeof value === 'number' && Number.isSafeInteger(value)
+    ? Math.min(MAX_PLAYERS, Math.max(min, value))
+    : fallback;
+}
+
+export function lobbyCode(value: unknown, fallback: string): string {
+  return typeof value === 'string' && /^[A-Z0-9_-]{1,64}$/.test(value) ? value : fallback;
+}
 
 export interface WireMessage {
   t: string;

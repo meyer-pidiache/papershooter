@@ -1,11 +1,11 @@
 import { KATANA_CHARGE_KILLS } from '../domain/focus.js';
 import * as THREE from 'three';
 import { BOSSES } from '../gameplay/enemies.js';
-import { audio } from '../presentation/audio.js';
 import { choose, clamp } from '../engine/math.js';
 import { planWave, bossFor, enemyName } from '../domain/waves';
 
 export function createWaves(runtime, actions = {}) {
+  const audio = runtime.audio;
   const { hud, game, enemies, player, preferences, world, net } = runtime;
   const { spawnPickup, enterFocus } = actions;
   // ---------------- solo waves ----------------

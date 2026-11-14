@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { clamp, rand, choose } from '../engine/math.js';
 
-class Sfx {
+export class Sfx {
   constructor() {
     this.ctx = null;
     this.master = null;
@@ -30,6 +30,16 @@ class Sfx {
   }
   resume() {
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  }
+  dispose() {
+    this.musicOn(false);
+    this.reelLoop(false);
+    if (this.ctx)
+      void this.ctx.close().catch(() => {
+        // A browser may close the context itself while the page is being discarded.
+      });
+    this.ctx = null;
+    this.noiseBuf = null;
   }
   setListener(pos, right) {
     this.listenerPos.copy(pos);
@@ -864,4 +874,3 @@ function thirdBelow(n) {
   while (((m % 12) + 12) % 12 !== G_SCALE[k]) m--;
   return m;
 }
-export const audio = new Sfx();

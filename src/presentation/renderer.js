@@ -334,5 +334,6 @@ export class InkRenderer {
     this.postScene.traverse((object) => object.geometry?.dispose());
     this.post.dispose();
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
   }
 }

@@ -3,7 +3,7 @@ import { vi } from 'vitest';
 import { createApplication } from '../../src/application/application.js';
 import { Preferences } from '../../src/platform/preferences.js';
 
-export function applicationFixture(map = 'district') {
+export function applicationFixture(map = 'district', options = {}) {
   document.body.innerHTML = '<canvas id="c"></canvas><div id="hud"></div>';
   const renderer = {
     scene: new Scene(),
@@ -26,6 +26,7 @@ export function applicationFixture(map = 'district') {
     renderer,
     preferences,
     autoStart: false,
+    ...options,
   });
   app.runtime.input.usingGamepad = true;
   let now = performance.now();

@@ -8,14 +8,16 @@ import { EnemyManager } from '../gameplay/enemies.js';
 import { Player } from '../gameplay/player.js';
 import { Net } from '../network/peer-transport.js';
 import { HUD } from '../presentation/hud.js';
-import { audio } from '../presentation/audio.js';
+import { Sfx } from '../presentation/audio.js';
 import { browserPreferences } from '../platform/preferences.js';
 import { comboScore, FFA_TIME } from '../domain/match.js';
 import { knownMap } from '../domain/maps.js';
 import { disposeObjects } from '../engine/resources.js';
 
 /** Owns resources and shared match state; controllers receive explicit actions from composition. */
+/** @param {import('./contracts.js').ApplicationOptions} options */
 export function createRuntime(options) {
+  const audio = options.audio ?? new Sfx();
   const canvas = options.canvas;
   const R = options.renderer ?? new InkRenderer(canvas);
   const world = new World();
@@ -132,6 +134,7 @@ export function createRuntime(options) {
   }
   audio.setTune(state.mapKey === 'mexico' ? 'mexico' : 'district');
   return {
+    audio,
     canvas,
     R,
     world,

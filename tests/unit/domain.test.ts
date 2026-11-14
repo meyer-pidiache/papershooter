@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { parseScoreRows } from '../../src/domain/match';
+import { lobbyCode, lobbyCount } from '../../src/network/protocol';
 import { knownMap, mapName } from '../../src/domain/maps';
 import {
   comboScore,
@@ -10,6 +12,28 @@ import {
 import { bossFor, enemyName, planWave } from '../../src/domain/waves';
 
 describe('game rules', () => {
+  it('rejects malformed score rows and normalizes public lobby metadata', () => {
+    const row = { id: 'host', name: 'paper', kills: 1, deaths: 0 };
+    expect(parseScoreRows([row])).toEqual([row]);
+    for (const payload of [
+      null,
+      {},
+      Array(11).fill(row),
+      [null],
+      [{ ...row, id: '' }],
+      [row, row],
+      [{ ...row, name: 1 }],
+      [{ ...row, kills: '<img src=x>' }],
+      [{ ...row, deaths: -1 }],
+      [{ ...row, kills: NaN }],
+    ])
+      expect(parseScoreRows(payload)).toBeNull();
+    expect(lobbyCode('<img src=x>', 'ABCDE')).toBe('ABCDE');
+    expect(lobbyCode('PUB0-1', 'ABCDE')).toBe('PUB0-1');
+    expect(lobbyCount('<img src=x>')).toBe(0);
+    expect(lobbyCount(100)).toBe(10);
+    expect(lobbyCount(-5)).toBe(0);
+  });
   it('normalizes known maps without losing Mexico', () => {
     expect(knownMap('mexico')).toBe('mexico');
     expect(knownMap('unknown')).toBe('district');

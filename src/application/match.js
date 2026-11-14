@@ -1,11 +1,18 @@
 import * as THREE from 'three';
 import { INK } from '../presentation/renderer.js';
-import { audio } from '../presentation/audio.js';
 import { choose } from '../engine/math.js';
-import { FFA_TARGET, RESPAWN, formatClock as mmss, rankScores, recordDeath } from '../domain/match';
+import {
+  FFA_TARGET,
+  RESPAWN,
+  formatClock as mmss,
+  rankScores,
+  recordDeath,
+  parseScoreRows,
+} from '../domain/match';
 import { escapeHtml as esc } from '../presentation/html';
 
 export function createMatch(runtime, actions = {}) {
+  const audio = runtime.audio;
   const { remote, player, online, game, net, scores, hud, effects, input } = runtime;
   const { endFocus } = actions;
   // ---------------- free for all: spawning, death, scoring ----------------
@@ -103,8 +110,10 @@ export function createMatch(runtime, actions = {}) {
     applyScores(rows);
   }
   function applyScores(rows) {
+    const parsed = parseScoreRows(rows);
+    if (!parsed) return;
     scores.clear();
-    for (const r of rows) scores.set(r.id, { name: r.name, kills: r.kills, deaths: r.deaths });
+    for (const r of parsed) scores.set(r.id, { name: r.name, kills: r.kills, deaths: r.deaths });
     refreshScoreHud();
   }
   function sortedScores() {
@@ -120,7 +129,7 @@ export function createMatch(runtime, actions = {}) {
       top
         .map(
           ([id, sc]) =>
-            `<div class="row${id === net.id ? ' me' : ''}"><span class="rank">${rows.findIndex(([x]) => x === id) + 1}.</span><span>${esc(sc.name)}${id === net.id ? ' (you)' : ''}</span><b>${sc.kills}</b></div>`,
+            `<div class="row${id === net.id ? ' me' : ''}"><span class="rank">${rows.findIndex(([x]) => x === id) + 1}.</span><span>${esc(sc.name)}${id === net.id ? ' (you)' : ''}</span><b>${esc(sc.kills)}</b></div>`,
         )
         .join('') + `<div class="target">first to ${FFA_TARGET}</div>`,
     );
@@ -129,7 +138,7 @@ export function createMatch(runtime, actions = {}) {
   }
   function boardHTML(title = 'FREE FOR ALL') {
     const rows = sortedScores();
-    return `<h3>${title}</h3>${rows.map(([id, s]) => `<div class="${id === net.id ? 'me' : ''}"><span>${esc(s.name)}${id === net.id ? ' (you)' : ''}</span><span>${s.kills} kills · ${s.deaths} deaths</span></div>`).join('')}<div class="foot">first to ${FFA_TARGET} · ${mmss(runtime.state.matchLeft)} left · lobby ${String(net.aliasCode || net.code || '').replace(/-\d+$/, '')}</div>`;
+    return `<h3>${esc(title)}</h3>${rows.map(([id, s]) => `<div class="${id === net.id ? 'me' : ''}"><span>${esc(s.name)}${id === net.id ? ' (you)' : ''}</span><span>${esc(s.kills)} kills · ${esc(s.deaths)} deaths</span></div>`).join('')}<div class="foot">first to ${FFA_TARGET} · ${mmss(runtime.state.matchLeft)} left · lobby ${esc(String(net.aliasCode || net.code || '').replace(/-\d+$/, ''))}</div>`;
   }
   function checkWin() {
     if (!net.isHost || !online() || game.over) return;
@@ -153,7 +162,7 @@ export function createMatch(runtime, actions = {}) {
       `<h1>${esc(title)}</h1><div class="scoreboard">${sortedScores()
         .map(
           ([id, s]) =>
-            `<div class="${id === net.id ? 'me' : ''}"><span>${esc(s.name)}</span><span>${s.kills} K · ${s.deaths} D</span></div>`,
+            `<div class="${id === net.id ? 'me' : ''}"><span>${esc(s.name)}</span><span>${esc(s.kills)} K · ${esc(s.deaths)} D</span></div>`,
         )
         .join('')}</div><div class="go" id="overGo">back to the lobby in a moment…</div>`,
     );

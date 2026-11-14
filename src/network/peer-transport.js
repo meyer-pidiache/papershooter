@@ -1,14 +1,15 @@
 import { Peer } from 'peerjs';
 import { networkConfig } from './config.js';
 import { createIceClient } from './ice-client.js';
-import { isWireMessage } from './protocol.js';
+import { isWireMessage, lobbyCode, lobbyCount } from './protocol.js';
+import { MAX_PLAYERS } from '../domain/match.js';
 
 // Peer-to-peer networking over WebRTC, using the public PeerJS signalling service.
 // The host player's browser is authoritative. A small same-origin endpoint obtains temporary
 // Cloudflare TURN credentials so WebRTC can relay traffic when a direct connection is blocked.
 //
 // Lobby codes are just peer ids. A private lobby takes a random 5 letter code; a public lobby
-// claims one of a handful of well-known ids (PUB0..PUB7) so quick play can find it by knocking on
+// claims one of a handful of well-known ids (PUB0..PUB15) so quick play can find it by knocking on
 // every slot at once - a directory with no directory server. A connection only counts once the
 // host has answered with a welcome, so a full or closed lobby can be skipped for the next one.
 
@@ -37,6 +38,7 @@ export class Net {
     namespace = defaults.namespace,
   } = {}) {
     this.PeerClass = PeerClass;
+    this.generation = 0;
     this.options = options;
     this.prefix = namespace;
     this.peer = null;
@@ -45,12 +47,13 @@ export class Net {
     this.id = null;
     this.code = null;
     this.hostId = null;
+    this.authorityId = null;
     this.handlers = new Map();
     this.connected = false;
     this.onPeerJoin = null;
     this.onPeerLeave = null;
     this.onDisconnect = null;
-    this.maxPlayers = 10;
+    this.maxPlayers = MAX_PLAYERS;
     this.accepting = true;
     this.hostName = '';
     this.stats = { sent: 0, recv: 0 };
@@ -67,7 +70,7 @@ export class Net {
   }
   onHost(type, fn) {
     this.on(type, (data, from) => {
-      if (!this.isHost && from === this.hostId) fn(data, from);
+      if (!this.isHost && from === this.authorityId) fn(data, from);
     });
   }
   _emit(type, data, from) {
@@ -76,7 +79,9 @@ export class Net {
   }
 
   async _newPeer(id) {
+    const generation = this.generation;
     const opts = await this.options();
+    if (generation !== this.generation) throw new Error('lobby operation cancelled');
     return new Promise((resolve, reject) => {
       const peer = new this.PeerClass(id, opts);
       let settled = false;
@@ -91,6 +96,11 @@ export class Net {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        if (generation !== this.generation) {
+          peer.destroy();
+          reject(new Error('lobby operation cancelled'));
+          return;
+        }
         resolve(peer);
       });
       peer.on('error', (err) => {
@@ -196,6 +206,7 @@ export class Net {
     }
     this.id = this.peer.id;
     this.hostId = this.id;
+    this.authorityId = this.id;
     this.connected = true;
     this.accepting = true;
     this.peer.on('connection', (conn) => this._incoming(conn));
@@ -305,7 +316,7 @@ export class Net {
     }
     const { hostId, conn, welcome } = res;
     this._adopt(hostId, conn, welcome);
-    this.code = (welcome && welcome.code) || hostId.slice(this.prefix.length);
+    this.code = lobbyCode(welcome?.code, hostId.slice(this.prefix.length));
     return this.code;
   }
   // try every public slot at the same time and take the first host that says welcome
@@ -399,7 +410,7 @@ export class Net {
     }
     winner.conn.send({ t: 'stay' });
     this._adopt(winner.hostId, winner.conn, winner.welcome);
-    this.code = (winner.welcome && winner.welcome.code) || winner.hostId.slice(this.prefix.length);
+    this.code = lobbyCode(winner.welcome?.code, winner.hostId.slice(this.prefix.length));
     return this.code;
   }
   // knock on several ids at once; the first welcome wins, a refusal or a missing lobby on every one fails
@@ -468,9 +479,9 @@ export class Net {
             const d = msg.d || {};
             offers.push({
               id: hostId.slice(this.prefix.length),
-              code: d.code || hostId.slice(this.prefix.length),
-              players: d.players || 0,
-              max: d.max || 10,
+              code: lobbyCode(d.code, hostId.slice(this.prefix.length)),
+              players: lobbyCount(d.players),
+              max: lobbyCount(d.max, MAX_PLAYERS, 1),
               inMatch: !!d.inMatch,
               hostName: d.hostName || '',
               full: msg.t === 'refused',
@@ -607,12 +618,16 @@ export class Net {
   }
   _adopt(hostId, conn, welcome) {
     this.hostId = hostId;
+    // The physical connection may target a reclaimed alias after migration. The host broadcasts
+    // with its canonical generation id, which is also used by the lobby and score tables.
+    this.authorityId = typeof welcome?.hostId === 'string' ? welcome.hostId : hostId;
     this.conns.set(hostId, conn);
     this.connected = true;
     this.isPublic = !!(welcome && welcome.isPublic);
     this._wire(conn);
   }
   leave() {
+    this.generation++;
     // closing our own connections must not look like other people leaving
     this.leaving = true;
     clearTimeout(this._aliasTimer);
@@ -647,6 +662,7 @@ export class Net {
     this.id = null;
     this.code = null;
     this.hostId = null;
+    this.authorityId = null;
     this.leaving = false;
   }
 

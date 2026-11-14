@@ -13,7 +13,6 @@ import {
   alignYAxis,
   TAU,
 } from '../engine/math.js';
-import { audio } from '../presentation/audio.js';
 
 const _v = new THREE.Vector3(),
   _v2 = new THREE.Vector3(),
@@ -192,9 +191,9 @@ export class EnemyManager {
       T.boss ? 10 : 6,
       { life: 0.5, size: 0.03 },
     );
-    audio.spawn(pos);
+    this.ctx.audio.spawn(pos);
     if (T.boss) {
-      audio.bossRoar(pos);
+      this.ctx.audio.bossRoar(pos);
       if (this.onBoss) this.onBoss(e);
     }
     return e;
@@ -315,7 +314,7 @@ export class EnemyManager {
         8,
         8,
       );
-      audio.shieldHit(info.point);
+      this.ctx.audio.shieldHit(info.point);
       if (info.source === 'katana' || info.source === 'blast') {
         e.shieldHp--;
         if (e.shieldHp <= 0) this._breakShield(e);
@@ -336,8 +335,8 @@ export class EnemyManager {
     this.ctx.effects.blood(info.point || e.center, dir, amt, {
       ink: e.T.ink === INK.BLACK ? INK.BLACK : INK.RED,
     });
-    if (info.crit) audio.headshot(e.center);
-    else audio.hitEnemy(e.center);
+    if (info.crit) this.ctx.audio.headshot(e.center);
+    else this.ctx.audio.hitEnemy(e.center);
     this.ctx.hud.hitmarker(e.hp <= 0, info.crit);
     if (info.source !== 'deflect') this.ctx.input.rumble(0.1, 0.3, 30);
     if (e.state === 'spawn') {
@@ -365,7 +364,7 @@ export class EnemyManager {
     e.hit = e.hit.filter((h) => h[0] !== 'shield');
     e.hitSpheres = e.hit.map(() => new THREE.Vector3());
     e.J.shieldG = null;
-    audio.shieldHit(e.center);
+    this.ctx.audio.shieldHit(e.center);
     this.ctx.game.addScore(40, 'SHIELD BROKEN');
   }
   kill(e, info) {
@@ -388,7 +387,7 @@ export class EnemyManager {
       if (this.onKill) this.onKill(e, info, true);
       return;
     }
-    audio.enemyDie(e.center);
+    this.ctx.audio.enemyDie(e.center);
     if (e.T.flying) {
       e.root.updateWorldMatrix(true, false);
       scene.attach(e.root);
@@ -426,7 +425,7 @@ export class EnemyManager {
       });
     };
     if (over) {
-      audio.gib(e.center);
+      this.ctx.audio.gib(e.center);
       const J = e.J;
       if (
         info.crit ||
@@ -470,7 +469,7 @@ export class EnemyManager {
     if (e.J.shieldG) this._breakShield(e);
     if (e.T.boss) {
       eff.explosion(e.center, 6, INK.BLACK);
-      audio.explosion(e.center);
+      this.ctx.audio.explosion(e.center);
       if (this.onBoss) this.onBoss(e);
     }
     if (this.onKill) this.onKill(e, info, over);
@@ -479,7 +478,7 @@ export class EnemyManager {
     const T = e.T;
     const c = e.center.clone();
     this.ctx.effects.explosion(c, T.blast * scale, INK.BLACK);
-    audio.explosion(c);
+    this.ctx.audio.explosion(c);
     for (const P of this.targets()) {
       const d = P.center.distanceTo(c);
       if (P.alive && d < T.blast * scale) {
@@ -867,13 +866,14 @@ export class EnemyManager {
           setFill(e.mat, true);
           e.flashOn = true;
         }
-        if (Math.floor(e.fuseT * 8) !== Math.floor((e.fuseT + dt) * 8)) audio.fuse(e.center);
+        if (Math.floor(e.fuseT * 8) !== Math.floor((e.fuseT + dt) * 8))
+          this.ctx.audio.fuse(e.center);
         if (e.fuseT <= 0) this._explodeBomber(e);
         return;
       }
       if (dist < T.fuseRange && Math.abs(dy) < 2.2 && e.los) {
         e.fuseT = T.fuse;
-        audio.fuse(e.center);
+        this.ctx.audio.fuse(e.center);
         return;
       }
       if (e.los && dist < 12 && Math.abs(dy) < 1.5) this._steer(e, dt, pp.x, pp.z, T.speed, 45);
@@ -922,7 +922,7 @@ export class EnemyManager {
               e.stunDur = 1.1;
               b.vel.set((-dx / dist) * 7, 3.5, (-dz / dist) * 7);
             } else P.takeDamage(T.dmg * this.mods.damage, e.center);
-          } else audio.katanaSwing();
+          } else this.ctx.audio.katanaSwing();
           e.cool = rand(T.cool[0], T.cool[1]);
           e.backoffT = rand(0.45, 0.75);
         }
@@ -932,7 +932,7 @@ export class EnemyManager {
       if (dist < T.lunge && Math.abs(dy) < 1.7 && e.cool <= 0 && e.los) {
         e.attackT = 0.55;
         e.attackHit = false;
-        audio.lunge(e.center);
+        this.ctx.audio.lunge(e.center);
         b.vel.x += (dx / dist) * 2.5;
         b.vel.z += (dz / dist) * 2.5;
         return;
@@ -1039,7 +1039,7 @@ export class EnemyManager {
       if (a.kind === 'stomp') {
         if (a.t > 0.75 && !a.done) {
           a.done = true;
-          audio.stomp(e.center);
+          this.ctx.audio.stomp(e.center);
           ctx.effects.shakeAmt += 0.9;
           ctx.effects.explosion(b.pos.clone().add(_v.set(0, 0.2, 0)), 7, INK.BLACK);
           for (let i = 0; i < 24; i++) {
@@ -1079,7 +1079,7 @@ export class EnemyManager {
           _d.y += l * 0.012;
           _d.normalize();
           this.projectiles.fire(_v, _d, 24, T.dmg * 0.9, e, INK.BLACK, 0.4, 1);
-          audio.enemyShot(e.center);
+          this.ctx.audio.enemyShot(e.center);
         }
         if (a.t > 1.0) {
           e.bossAtk = null;
@@ -1092,7 +1092,7 @@ export class EnemyManager {
     if (e.cool <= 0 && e.los) {
       if (dist < 7 && Math.abs(dy) < 3) {
         e.bossAtk = { kind: 'stomp', t: 0, done: false };
-        audio.bossRoar(e.center);
+        this.ctx.audio.bossRoar(e.center);
         return;
       }
       if (dist < T.range) {
@@ -1121,7 +1121,7 @@ export class EnemyManager {
           b.vel.z = damp(b.vel.z, 0, 8, dt);
           if (a.t > 0.55 && !a.dir) {
             a.dir = new THREE.Vector3(pp.x - b.pos.x, 0, pp.z - b.pos.z).normalize();
-            audio.bossRoar(e.center);
+            this.ctx.audio.bossRoar(e.center);
           }
         } else if (a.t < 1.9) {
           b.vel.x = a.dir.x * 17 * this.mods.speed;
@@ -1139,7 +1139,7 @@ export class EnemyManager {
           if (b.hitWall) {
             a.t = 1.9;
             ctx.effects.strokeBurst(e.center, INK.PINK, 30, 9, { life: 0.4, size: 0.05 });
-            audio.stomp(e.center);
+            this.ctx.audio.stomp(e.center);
             ctx.effects.shakeAmt += 0.6;
           }
           if (Math.floor(a.t * 10) !== Math.floor((a.t - dt) * 10))
@@ -1162,7 +1162,7 @@ export class EnemyManager {
         b.vel.z = damp(b.vel.z, 0, 6, dt);
         if (a.t > 0.9 && !a.done) {
           a.done = true;
-          audio.stomp(e.center);
+          this.ctx.audio.stomp(e.center);
           ctx.effects.shakeAmt += 0.8;
           // scrubs the page clean around itself, and the rubbings get up and walk
           ctx.effects.explosion(b.pos.clone().add(_v.set(0, 0.2, 0)), 6, INK.PINK);
@@ -1227,7 +1227,7 @@ export class EnemyManager {
           _d.set(Math.sin(an), 0.18 + rand(-0.05, 0.05), Math.cos(an)).normalize();
           this.projectiles.fire(_v, _d, 20, T.dmg * 0.55 * this.mods.damage, e, INK.BLACK, 0.3, 1);
           a.shots++;
-          if (a.shots === 1) audio.enemyShot(e.center);
+          if (a.shots === 1) this.ctx.audio.enemyShot(e.center);
         }
         if (a.t > 1.8) {
           e.bossAtk = null;
@@ -1237,7 +1237,7 @@ export class EnemyManager {
       } else {
         if (a.t > 0.8 && !a.done) {
           a.done = true;
-          audio.bossRoar(e.center);
+          this.ctx.audio.bossRoar(e.center);
           ctx.effects.strokeBurst(e.center, INK.BLACK, 40, 10, { life: 0.5, size: 0.05 });
           const live = this.enemies.filter((x) => x.alive && x.type === 'flyer').length;
           for (let i = 0; i < 3 && live + i < 6; i++) {
@@ -1268,7 +1268,7 @@ export class EnemyManager {
     }
     if (e.hopping && b.onGround) {
       e.hopping = false;
-      audio.stomp(e.center);
+      this.ctx.audio.stomp(e.center);
       ctx.effects.shakeAmt += 0.4;
       ctx.effects.bloodPool(b.pos, 3.5, INK.BLACK);
       for (const t of this.targets()) {
@@ -1323,9 +1323,9 @@ export class EnemyManager {
         e.flyState = 'dive';
         e.flyT = 1.6;
         e.diveHit = false;
-        audio.flyerDive(e.center);
+        this.ctx.audio.flyerDive(e.center);
       }
-      if (Math.random() < dt * 1.5) audio.flyerBuzz(e.center);
+      if (Math.random() < dt * 1.5) this.ctx.audio.flyerBuzz(e.center);
     } else if (e.flyState === 'dive') {
       want.copy(pc);
       this._flyTo(e, want, 16, 28, dt);
@@ -1399,14 +1399,14 @@ export class EnemyManager {
       this._showLaser(e, muzzle, e.aimPoint, clamp(e.aimT / T.aimTime, 0, 1));
       if (e.aimT > T.aimTime * 0.5 && !e.aimWarned) {
         e.aimWarned = true;
-        audio.sniperAim(e.center);
+        this.ctx.audio.sniperAim(e.center);
       }
       if (e.aimT >= T.aimTime) {
         e.aimT = 0;
         e.aimWarned = false;
         e.cool = rand(T.cool[0], T.cool[1]);
         this._fireOne(e, muzzle, e.aimPoint, T.spread, T.pspeed, T.dmg, 0.07, P);
-        audio.sniperShot(e.center);
+        this.ctx.audio.sniperShot(e.center);
         this._hideLaser(e);
         e.aimPoint = null;
       }
@@ -1418,7 +1418,7 @@ export class EnemyManager {
         e.burstT = T.burstInt;
         e.burstLeft--;
         this._fireOne(e, muzzle, pc, T.spread, T.pspeed, T.dmg, 0.045, P);
-        audio.enemyShot(e.center);
+        this.ctx.audio.enemyShot(e.center);
         if (e.burstLeft === 0) e.cool = rand(T.cool[0], T.cool[1]);
       }
       return;
@@ -1427,7 +1427,7 @@ export class EnemyManager {
       if (T.weapon === 'shotgun') {
         for (let i = 0; i < T.pellets; i++)
           this._fireOne(e, muzzle, pc, T.spread, T.pspeed * rand(0.85, 1.1), T.dmg, 0.05, P);
-        audio.shotgun(e.center);
+        this.ctx.audio.shotgun(e.center);
         e.cool = rand(T.cool[0], T.cool[1]);
         ctx.effects.strokeBurst(muzzle, INK.ORANGE, 8, 5, { life: 0.1, size: 0.04 });
       } else {

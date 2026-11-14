@@ -13,7 +13,6 @@ import {
   alignYAxis,
   TAU,
 } from '../engine/math.js';
-import { audio } from '../presentation/audio.js';
 
 const _v = new THREE.Vector3(),
   _v2 = new THREE.Vector3(),
@@ -104,7 +103,7 @@ export class Projectiles {
   _burst(p, point) {
     const ctx = this.mgr.ctx;
     ctx.effects.explosion(point, 2.5, INK.BLACK);
-    audio.explosion(point);
+    this.mgr.ctx.audio.explosion(point);
     const P = ctx.player;
     const d = P.center.distanceTo(point);
     if (d < 3.5 && P.alive) {
@@ -138,7 +137,7 @@ export class Projectiles {
         if (p.blast) this._burst(p, hw.point);
         else {
           ctx.effects.bulletImpact(hw.point, hw.normal, p.ink);
-          if (Math.random() < 0.5) audio.bulletImpact(hw.point);
+          if (Math.random() < 0.5) this.mgr.ctx.audio.bulletImpact(hw.point);
         }
         continue;
       }

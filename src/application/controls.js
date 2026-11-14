@@ -1,7 +1,7 @@
-import { audio } from '../presentation/audio.js';
 import { FFA_TARGET, FFA_TIME } from '../domain/match';
 
 export function createControls(runtime, actions = {}) {
+  const audio = runtime.audio;
   const listeners = [];
   function listen(target, event, handler, options) {
     target.addEventListener(event, handler, options);

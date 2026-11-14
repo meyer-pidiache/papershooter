@@ -1,3 +1,6 @@
+import { isRecord } from '../shared/ice.js';
+
+export const MAX_PLAYERS = 10;
 export const FFA_TARGET = 20;
 export const FFA_TIME = 600;
 export const RESPAWN = 2.5;
@@ -6,6 +9,42 @@ export interface Score {
   name: string;
   kills: number;
   deaths: number;
+}
+
+export interface ScoreRow extends Score {
+  id: string;
+}
+
+/** Network scores are untrusted data even when their sender is the elected host. */
+export function parseScoreRows(value: unknown): ScoreRow[] | null {
+  if (!Array.isArray(value) || value.length > MAX_PLAYERS) return null;
+  const rows: ScoreRow[] = [];
+  const ids = new Set<string>();
+  for (const row of value) {
+    if (
+      !isRecord(row) ||
+      typeof row.id !== 'string' ||
+      !row.id ||
+      row.id.length > 128 ||
+      ids.has(row.id)
+    )
+      return null;
+    if (typeof row.name !== 'string') return null;
+    const kills = row.kills,
+      deaths = row.deaths;
+    if (
+      typeof kills !== 'number' ||
+      !Number.isSafeInteger(kills) ||
+      kills < 0 ||
+      typeof deaths !== 'number' ||
+      !Number.isSafeInteger(deaths) ||
+      deaths < 0
+    )
+      return null;
+    ids.add(row.id);
+    rows.push({ id: row.id, name: row.name.slice(0, 14), kills, deaths });
+  }
+  return rows;
 }
 
 export function formatClock(seconds: number): string {

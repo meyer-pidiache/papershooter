@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { makeInkMaterial, INK } from '../presentation/renderer.js';
-import { rand, choose, TAU } from '../engine/math.js';
 
 export function buildDistrict(B, arena = false) {
   const {

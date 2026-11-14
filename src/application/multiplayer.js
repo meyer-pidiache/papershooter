@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { INK } from '../presentation/renderer.js';
 import { RemotePlayer, encodeLocal } from '../gameplay/remote-player.js';
-import { audio } from '../presentation/audio.js';
 import { knownMap } from '../domain/maps';
 import { FFA_TIME, formatClock as mmss } from '../domain/match';
 
 export function createMultiplayer(runtime, actions = {}) {
+  const audio = runtime.audio;
   const {
     remote,
     ctx,
@@ -209,7 +209,7 @@ export function createMultiplayer(runtime, actions = {}) {
   net.on('refused', (d) => leaveOnline(d.reason));
   net.hostName = runtime.state.myName;
   net.onPeerJoin = (from, meta) => {
-    const name = String((meta && meta.name) || 'paper').slice(0, 14);
+    const name = typeof meta?.name === 'string' ? meta.name.slice(0, 14) : 'paper';
     if (meta && meta.prev && meta.prev !== from) {
       const sc = scores.get(meta.prev);
       if (sc) {

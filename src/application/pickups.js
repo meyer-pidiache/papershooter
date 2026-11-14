@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { INK, makeInkMaterial } from '../presentation/renderer.js';
-import { audio } from '../presentation/audio.js';
 import { rand, choose } from '../engine/math.js';
 
 export function createPickups(runtime, actions = {}) {
+  const audio = runtime.audio;
   const { R, net, player, hud, effects } = runtime;
   // ---------------- pickups ----------------
   let pickupId = 1;

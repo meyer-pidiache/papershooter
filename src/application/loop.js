@@ -1,8 +1,8 @@
 import { FOCUS_SCALE, KATANA_CHARGE_KILLS } from '../domain/focus.js';
-import { audio } from '../presentation/audio.js';
 import { clamp } from '../engine/math.js';
 
 export function createLoop(runtime, actions = {}) {
+  const audio = runtime.audio;
   const { net, input, game, hud, online, preferences, player, enemies, effects, remote, R } =
     runtime;
   const {

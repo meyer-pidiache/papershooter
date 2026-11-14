@@ -7,10 +7,10 @@ import {
 } from '../domain/focus.js';
 import * as THREE from 'three';
 import { INK } from '../presentation/renderer.js';
-import { audio } from '../presentation/audio.js';
 import { clamp } from '../engine/math.js';
 
 export function createFocus(runtime, actions = {}) {
+  const audio = runtime.audio;
   const { enemies, player, world, online, game, hud, input, effects, R } = runtime;
   // ---------------- focus slash (solo only) ----------------
 
