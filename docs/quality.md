@@ -17,16 +17,17 @@ Branch coverage is reported separately and still has room to improve in combat, 
 failure paths. Do not describe line coverage as branch coverage or lower Sonar's gate to hide a
 missing report. Sonar's own new-code/condition calculations can differ from the local total.
 
-Local measurement on 2026-11-14 after the asynchronous-failure regressions and unused-code cleanup:
+Local whole-product measurement at checkpoint `c9aed64` on 2026-11-14, before subsequent weapon
+extraction (later CI/generated reports supersede these snapshot values):
 
-| Metric                      | Result                                         |
-| --------------------------- | ---------------------------------------------- |
-| Unit/integration tests      | 81 passing, including architecture regressions |
-| Statements                  | 84.39%                                         |
-| Lines                       | 86.01%                                         |
-| Functions                   | 85.31%                                         |
-| Branches                    | 71.93%                                         |
-| Production dependency audit | 0 known advisories at the time of inspection   |
+| Metric                      | Result                                          |
+| --------------------------- | ----------------------------------------------- |
+| Unit/integration tests      | 163 passing, including architecture regressions |
+| Statements                  | 87.43%                                          |
+| Lines                       | 88.89%                                          |
+| Functions                   | 88.97%                                          |
+| Branches                    | 76.65%                                          |
+| Production dependency audit | 0 known advisories at the time of inspection    |
 
 The generated report and latest CI run are authoritative. Test seeds are fixed so procedural
 variation does not randomly change assertions/coverage. Dependency advisories are time-sensitive;
@@ -41,7 +42,10 @@ rerun `pnpm audit --prod` when updating dependencies or preparing a release.
 - Waves, bosses, checkpoints, rewards, death/respawn, FFA scores and host migration.
 - Real application controllers with replaceable renderer/transport boundaries: map switches,
   pickups, destructibles, damage, network snapshots, lobby browsing and match results.
-- Weapons, ammunition conservation, reloads, katana guard/slash, grenades and remote model state.
+- Pre-extraction weapon geometry/action-cycle, camera, grenade and grapple traces; ammunition
+  conservation, reload interruption, melee windows and remote model state.
+- Recorded complete procedural-audio schedules and composed particle/decal/fragment output,
+  including shared resource retirement and automatic-reload cancellation.
 - Keyboard/mouse/gamepad input, audio envelopes/theme scheduling, resource/listener/context cleanup.
 - Provider-independent ICE validation, caching/coalescing/expiry, Cloudflare failures, coturn HMAC,
   bounded rate limiting, method/error/CORS handling and credential redaction.
@@ -52,6 +56,25 @@ Recording adapters replace WebGL/audio hardware and external signaling in unit t
 real pass/uniform/envelope/controller behavior. They do not prove shader appearance, audio quality,
 GPU performance or NAT traversal. Chromium smoke tests run against `dist/` and exercise the actual
 browser renderer/menu/game code. Browser tests are not silently added to the unit coverage total.
+
+## Transform baseline precision
+
+Transform snapshots copy each matrix at capture time; Three.js mutates its matrix arrays in place.
+Keeping the array reference would make earlier samples accidentally show the final transform.
+Weapon/effect transform matrices are normalized to 10 decimal places before hashing. Geometry and
+instance-buffer bytes, ammo, visibility and other discrete state retain their exact comparisons.
+
+The [x64 diagnostic run](https://github.com/meyer-pidiache/papershooter/actions/runs/43620170805)
+and the local ARM trace differed only in shotgun flash matrix values, by at most
+`2.7755575615628914e-16`; all other sampled state and geometry matched. The `1e-10` absolute matrix
+resolution remains much finer than unit-scale Float32 rendering or the world's `1e-4` collision
+precision. It removes platform trigonometric noise while retaining meaningful transform changes.
+
+After improving capture/normalization, references were recorded against the **pre-extraction**
+weapon/effect implementations (`d992691` / `a528048`) and then checked against the extracted owners.
+They were not regenerated from changed gameplay to accept a failing result. Preserve that process
+when the measurement itself changes. On mismatch, weapon traces are saved under `reports/` and
+included in the existing CI artifact for investigation.
 
 ## Security changes for the baseline findings
 
@@ -73,8 +96,8 @@ signing secret and expiring credentials; it is not used to store passwords. Keep
 attribution and the scoped license notice intact.
 
 The subsequent [manual refactor review](reviews/2026-11-14-refactor.md) identifies remaining
-payload-validation, ownership, resource-lifetime and decomposition work that these green checks do
-not prove complete. `pnpm review:structure` publishes advisory size/complexity findings alongside
+ownership/controller and enemy decomposition work, alongside resolved payload/resource findings.
+These green checks do not prove the complete architectural review finished. `pnpm review:structure` publishes advisory size/complexity findings alongside
 coverage; see the [engineering standard](engineering-standard.md) for its policy and limits.
 
 ## Browser and deployment limits

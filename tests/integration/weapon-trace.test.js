@@ -27,7 +27,9 @@ function frame(weapon) {
   const nodes = [];
   weapon.root.traverse((node) =>
     nodes.push({
-      matrix: node.matrixWorld.elements,
+      // Copy each frame; Three.js mutates matrix arrays in place. ARM/x64 trig differed
+      // by <=2.78e-16 in the flash matrices; 1e-10 remains below Float32 precision at unit scale.
+      matrix: node.matrixWorld.elements.map((value) => +value.toFixed(10)),
       visible: node.visible,
       ink: node.material?.uniforms?.uInk.value,
       fill: node.material?.uniforms?.uFill.value,

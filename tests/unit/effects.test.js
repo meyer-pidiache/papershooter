@@ -14,7 +14,8 @@ function frame(scene, effects) {
     if (!node.isMesh) return;
     meshes.push({
       geometry: node.geometry.type,
-      matrix: node.matrixWorld.elements,
+      // Preserve each sampled transform instead of retaining Three.js's mutable array.
+      matrix: node.matrixWorld.elements.map((value) => +value.toFixed(10)),
       count: node.count,
       instances:
         node.instanceMatrix && Array.from(node.instanceMatrix.array.slice(0, node.count * 16)),
