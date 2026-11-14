@@ -34,3 +34,9 @@ export interface PumpFrame {
   progress: number;
   finished: boolean;
 }
+
+export interface SwingFrame {
+  progress: number;
+  direction: 1 | -1;
+  hit: boolean;
+}

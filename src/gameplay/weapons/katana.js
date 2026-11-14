@@ -1,11 +1,12 @@
+import { MeleeMechanics } from './melee-mechanics.js';
+import { BladeAnimation } from '../../presentation/weapons/blade-animation.js';
 import * as THREE from 'three';
 import { INK } from '../../shared/ink.js';
-import { rand, clamp, damp, lerp } from '../../engine/math.js';
+import { rand } from '../../engine/math.js';
 import { ViewModel } from '../../presentation/viewmodel.js';
 import { buildKatana } from '../../presentation/models/katana.js';
 const _v = new THREE.Vector3(),
   _v2 = new THREE.Vector3();
-const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 export class Katana extends ViewModel {
   constructor(ctx) {
     super(ctx);
@@ -15,40 +16,21 @@ export class Katana extends ViewModel {
     this.basePos.set(0.27, -0.25, -0.4);
     this.baseRot.set(0.75, 0.15, -0.35);
     this.aimPos.copy(this.basePos);
-    this.slashT = 0;
-    this.slashDur = 0.27;
-    this.combo = 0;
-    this.comboT = 0;
-    this.blocking = false;
-    this.blockT = 0;
-    this.blockAmt = 0;
-    this.hitDone = false;
-    this.cooldown = 0;
-    this.damage = 75;
-    // guard pose: the sword simply comes in close to the face, held upright
-    this.blockPos = new THREE.Vector3(0.21, -0.31, -0.36);
-    this.blockRot = new THREE.Vector3(1.4, 0.3, 1.24);
-    this.deflectKick = 0;
-    this.parrySwing = 0;
-    this.parryDir = 1;
-    this.bloodLevel = 0;
+    this.mechanics = new MeleeMechanics();
     this.model = buildKatana(this.root);
+    this.animation = new BladeAnimation(this.root, this.model, this.recoil, this.recoilRot);
   }
 
   get spreadPx() {
     return 4;
   }
   startSlash(st) {
-    this.slashT = this.slashDur;
-    this.hitDone = false;
-    this.combo++;
-    this.comboT = 0.9;
-    this.cooldown = this.slashDur + 0.06;
+    this.mechanics.startSlash();
     this.ctx.audio.katanaSwing();
     this.ctx.player.kickFov(2);
     if (st.sprinting || !st.grounded) this.ctx.player.lunge(5.5);
     const P = this.ctx.player,
-      s = this.combo % 2 === 0 ? -1 : 1;
+      s = this.mechanics.direction;
     const up = _v2.set(0, 1, 0);
     for (let i = 0; i < 9; i++) {
       const a = (-1.1 + (2.2 * i) / 8) * s;
@@ -66,60 +48,35 @@ export class Katana extends ViewModel {
       this.ctx.effects.tracer(pa, pb, INK.BLUE, 0.03 - 0.002 * i, 0.12 + i * 0.01);
     }
   }
-  update(dt, st) {
-    this.cooldown -= dt;
-    this.comboT -= dt;
-    if (this.comboT <= 0) this.combo = 0;
-    this.deflectKick = Math.max(0, this.deflectKick - dt * 6);
-    this.parrySwing = Math.max(0, this.parrySwing - dt * 4.5);
-    this.updateBlood(dt, st);
-    // guard is up only while the aim trigger is held and you are not swinging
-    const wantBlock = st.aim && !st.fire && this.slashT <= 0 && this.cooldown <= 0;
-    if (wantBlock && !this.blocking) this.blockT = 0;
-    this.blocking = wantBlock;
-    if (this.blocking) this.blockT += dt;
-    this.blockAmt = damp(this.blockAmt, this.blocking ? 1 : 0, 16, dt);
-    const p = this.root.position,
-      r = this.root.rotation;
-    // Blend the whole pose to an absolute target. Adding an offset instead does not work here:
-    // the shared animator already scales the base rotation down by the aim amount, so the same
-    // offset landed on a different rotation depending on how far into the guard you were.
-    if (this.blockAmt > 0.001) {
-      const t = this.blockAmt;
-      p.lerp(this.blockPos, t);
-      r.x = lerp(r.x, this.blockRot.x, t);
-      r.y = lerp(r.y, this.blockRot.y, t);
-      r.z = lerp(r.z, this.blockRot.z, t);
-    }
-    // a parry is a small flick of the wrist, nothing that throws the pose around
-    if (this.parrySwing > 0) {
-      const e = Math.sin(Math.min(1, this.parrySwing) * Math.PI);
-      r.z += this.parryDir * e * 0.42;
-      r.y += this.parryDir * e * 0.16;
-      p.x += this.parryDir * e * 0.035;
-    }
-    if (this.slashT > 0) {
-      this.slashT -= dt;
-      const t = clamp(1 - this.slashT / this.slashDur, 0, 1);
-      const e = easeInOut(t);
-      const s = this.combo % 2 === 0 ? -1 : 1;
-      r.z += s * (1.3 - 2.7 * e);
-      r.x += 0.7 - 1.5 * e;
-      r.y += s * (-0.35 + 0.8 * e);
-      p.x += s * (0.2 - 0.45 * e);
-      p.y += 0.14 - 0.24 * e;
-      p.z -= 0.12 * Math.sin(t * Math.PI);
-      if (!this.hitDone && t > 0.32) {
-        this.hitDone = true;
-        this.doHit(st, s);
-      }
-    } else if (
-      (st.firePressed || (st.fire && this.combo > 0)) &&
-      this.cooldown <= 0 &&
-      !st.blockFire
-    )
-      this.startSlash(st);
-    if (st.meleePressed && this.slashT <= 0 && this.cooldown <= 0) this.startSlash(st);
+  get blocking() {
+    return this.mechanics.blocking;
+  }
+  get blockT() {
+    return this.mechanics.blockTime;
+  }
+  get cooldown() {
+    return this.mechanics.cooldown;
+  }
+  set cooldown(value) {
+    this.mechanics.cooldown = value;
+  }
+  get damage() {
+    return this.mechanics.damage;
+  }
+  get bloodLevel() {
+    return this.animation.bloodLevel;
+  }
+  update(dt, frame) {
+    this.mechanics.age(dt);
+    this.animation.age(dt);
+    this.mechanics.guard(dt, frame);
+    this.animation.guard(dt, this.mechanics.blocking);
+    const swing = this.mechanics.advanceSwing(dt);
+    if (swing) {
+      this.animation.swing(swing);
+      if (swing.hit) this.doHit(frame, swing.direction);
+    } else if (this.mechanics.wantsFire(frame)) this.startSlash(frame);
+    if (this.mechanics.wantsMelee(frame)) this.startSlash(frame);
   }
   doHit(st, s) {
     const ctx = this.ctx,
@@ -170,27 +127,12 @@ export class Katana extends ViewModel {
     }
   }
   onDeflect(perfect) {
-    this.parrySwing = 1;
-    this.parryDir = -this.parryDir;
-    this.recoilRot.kick(perfect ? -3.5 : -2, this.parryDir * 2, this.parryDir * 2.5);
-    this.recoil.kick(this.parryDir * 0.15, 0.15, 1.2);
+    this.animation.onDeflect(perfect);
   }
-  // The blade picks up ink as it kills and slowly sheds it again, so a good run shows on the steel.
   addBlood(amount) {
-    this.bloodLevel = clamp(this.bloodLevel + amount, 0, 1);
+    this.animation.addBlood(amount);
   }
-  updateBlood(dt, st) {
-    this.bloodLevel = Math.max(0, this.bloodLevel - dt * 0.05);
-    const lv = this.bloodLevel;
-    for (let i = 0; i < this.model.smears.length; i++) {
-      const sm = this.model.smears[i];
-      const on = lv > sm.at;
-      sm.mesh.visible = on;
-      // grow along the blade and fill out in height as it soaks, never past the steel
-      if (on) {
-        const f = clamp((lv - sm.at) / 0.28, 0.2, 1);
-        sm.mesh.scale.set(1, 0.35 + 0.65 * f, 0.4 + 0.6 * f);
-      }
-    }
+  updateBlood(dt) {
+    this.animation.updateBlood(dt);
   }
 }
