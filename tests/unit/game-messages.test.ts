@@ -116,4 +116,17 @@ describe('gameplay wire contracts', () => {
     expect(isGamePayload('welcome', { ...offer, players: 11 })).toBe(false);
     expect(isGamePayload('welcome', { ...offer, hostName: 1 })).toBe(false);
   });
+
+  it('rejects sparse vectors, snapshots, rosters and batches rather than skipping empty slots', () => {
+    const snapshot = [...valid.ps];
+    delete snapshot[0];
+    for (const [t, d] of [
+      ['ps', snapshot],
+      ['pdmg', { amount: 1, from: Array(3) }],
+      ['shots', { k: 'rifle', e: Array(3) }],
+      ['lobby', { ...valid.lobby, players: Array(1) }],
+      ['start', { spawn: 1, broken: Array(1) }],
+    ])
+      expect(decodeGameMessage({ t, d })).toBeNull();
+  });
 });

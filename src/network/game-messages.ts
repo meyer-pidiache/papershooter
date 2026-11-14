@@ -24,17 +24,23 @@ const nullable =
   (check: Validator): Validator =>
   (value) =>
     value === null || check(value);
+function elements(value: unknown, check: Validator, max: number): boolean {
+  if (!Array.isArray(value) || value.length > max) return false;
+  // for...of visits empty slots as undefined; Array.every would silently skip them.
+  for (const entry of value) if (!check(entry)) return false;
+  return true;
+}
 const array =
   (check: Validator, max: number): Validator =>
   (value) =>
-    Array.isArray(value) && value.length <= max && value.every(check);
+    elements(value, check, max);
 const code: Validator = (value) => typeof value === 'string' && /^[A-Z0-9_-]{1,64}$/.test(value);
 const map: Validator = (value) => LEVELS.some((level) => level.key === value);
 const count: Validator = (value) =>
   integer(value) && (value as number) >= 1 && (value as number) <= MAX_PLAYERS;
 const index: Validator = (value) => integer(value) && (value as number) <= 65535;
 const vector: Validator = (value): value is WireVector =>
-  Array.isArray(value) && value.length === 3 && value.every(number);
+  Array.isArray(value) && value.length === 3 && elements(value, number, 3);
 
 function record(fields: Record<string, Validator>): Validator {
   const entries = Object.entries(fields);
@@ -89,7 +95,11 @@ function start(value: unknown): boolean {
   );
 }
 function snapshot(value: unknown): boolean {
-  if (!Array.isArray(value) || (value.length !== 11 && value.length !== 14) || !value.every(number))
+  if (
+    !Array.isArray(value) ||
+    (value.length !== 11 && value.length !== 14) ||
+    !elements(value, number, 14)
+  )
     return false;
   return (
     index(value[5]) &&
