@@ -20,6 +20,28 @@ export function createCombat(runtime, actions = {}) {
     shotQueue,
   } = runtime;
   const { spawnPickup } = actions;
+  player.grenadeSystem.onExplosion = (c, mine) => {
+    const R = 6.4;
+    ctx.effects.boom(c, R);
+    audio.explosion(c);
+    ctx.input.rumble(0.9, 0.9, 220);
+    // bots: the thrower's client reports the damage (host applies it; a client's report is forwarded)
+    if (mine) ctx.enemies.blastEnemies(c, R, 120, null);
+    if (mine && ctx.blastBreakables) ctx.blastBreakables(c, R);
+    // me: my own grenade, or anyone else's that went off on my screen
+    const d = player.center.distanceTo(c);
+    if (player.alive && d < R * 0.95) {
+      player.takeDamage(10 + 34 * (1 - d / (R * 0.95)), c);
+      player.knockback(_v.subVectors(player.center, c).normalize(), 9);
+    }
+    // other players in a versus match, decided by the thrower only
+    if (mine && ctx.targets)
+      for (const t of ctx.targets()) {
+        if (t.isLocal || !t.alive || (ctx.canHurt && !ctx.canHurt(t))) continue;
+        const dd = t.center.distanceTo(c);
+        if (dd < R * 0.95) t.takeDamage(12 + 50 * (1 - dd / (R * 0.95)), c);
+      }
+  };
   // anything a bullet or a blade can hit besides enemies
   ctx.targets = () => [player, ...remote.values()];
   ctx.canHurt = (t) => online() && t !== player;

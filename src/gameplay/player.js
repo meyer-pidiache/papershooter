@@ -1,3 +1,5 @@
+import { Grenades } from './player/grenades.js';
+import { GrenadeVisuals } from '../presentation/grenades.js';
 // First-person player: movement (sprint/slide/wall-jump/mantle/air dash), swing-grapple, camera feel, health, weapons.
 import * as THREE from 'three';
 import { makeBody } from '../engine/physics.js';
@@ -49,8 +51,6 @@ export class Player {
     this.alive = true;
     this.regenDelay = 4.5;
     this.regenRate = 11;
-    this.nadeCharge = 0;
-    this._nadeHeld = false;
     this.grapStam = 1;
     this.blockHeld = 0;
     this.stamPause = 0;
@@ -127,12 +127,31 @@ export class Player {
     this.isLocal = true;
     this.team = 0;
     this.name = 'you';
-    this.grenades = 3;
-    this.maxGrenades = 5;
-    this.nades = [];
-    this.nadeCd = 0;
     this.firing = false;
-    this.onThrow = null;
+    this.grenadePose = {
+      eye: this.eye,
+      right: this.right,
+      forward: this.forward,
+      velocity: this.body.vel,
+    };
+    this.grenadeSystem = new Grenades(
+      ctx.world,
+      new GrenadeVisuals(ctx.scene, ctx.world, ctx.resources),
+      {
+        thrown: () => {
+          this.weapon.recoil.kick(-0.4, 0.5, 1.2);
+          this.weapon.recoilRot.kick(-3, 0, -1.5);
+          ctx.audio.grappleFire();
+          ctx.input.rumble(0.2, 0.4, 50);
+        },
+        bounce: () => ctx.audio.shell(),
+        fuse: (position) =>
+          ctx.effects.strokeBurst(position.clone().add(_v.set(0, 0.22, 0)), INK.ORANGE, 2, 2.5, {
+            life: 0.12,
+            size: 0.02,
+          }),
+      },
+    );
     const rm = makeInkMaterial({ ink: INK.BLUE, fill: false, shadeBias: -0.3 });
     this.rope = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 6), rm);
     this.rope.visible = false;
@@ -147,9 +166,7 @@ export class Player {
     ctx.scene.add(this.hookMesh);
   }
   reset(pos) {
-    this.nadeCharge = 0;
-    this._nadeHeld = false;
-    if (this._arc) this.updateNadeArc(-1);
+    this.grenadeSystem.cancelCharge();
     this.grapStam = 1;
     this.blockHeld = 0;
     const b = this.body;
@@ -183,12 +200,35 @@ export class Player {
     this.switchTo(0, true);
     this.rig.visible = true;
     this.eyeH = EYE_STAND;
-    this.grenades = 3;
-    this.clearNades();
+    this.grenadeSystem.reset();
+  }
+
+  get grenades() {
+    return this.grenadeSystem.stock;
+  }
+  set grenades(value) {
+    this.grenadeSystem.stock = value;
+  }
+  get maxGrenades() {
+    return this.grenadeSystem.maximum;
+  }
+  get nades() {
+    return this.grenadeSystem.projectiles;
+  }
+  get onThrow() {
+    return this.grenadeSystem.onThrow;
+  }
+  set onThrow(handler) {
+    this.grenadeSystem.onThrow = handler;
   }
   clearNades() {
-    for (const n of this.nades) this.ctx.resources.release(n.mesh);
-    this.nades.length = 0;
+    this.grenadeSystem.clear();
+  }
+  throwGrenade(remote = null, charge = 0) {
+    this.grenadeSystem.throw(remote, charge, this.grenadePose);
+  }
+  updateNades(dt) {
+    this.grenadeSystem.update(dt);
   }
   get isBlocking() {
     return this.weapon.kind === 'katana' && this.weapon.blocking;
@@ -352,7 +392,13 @@ export class Player {
     this._updateJump(dt, motion);
     this._integrateMovement(dt, motion);
     const speed = this._recoverMovement(dt, motion.sprinting);
-    this._updateGrenadeInput(dt);
+    this.grenadeSystem.updateInput(
+      dt,
+      this.ctx.input.down('grenade'),
+      this.alive,
+      this.dashLock,
+      this.grenadePose,
+    );
     this._updateWeaponInput(dt, motion.sprinting, motion.aiming, speed);
   }
 
@@ -374,7 +420,7 @@ export class Player {
       -Math.cos(this.yaw) * Math.cos(this.pitch),
     );
     this.right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-    this.updateNades(dt);
+    this.grenadeSystem.update(dt);
     this._updateCamera(dt);
     this.weapon.animate(dt, this._weaponState(false, false, 0));
     return;
@@ -663,29 +709,6 @@ export class Player {
     return hs2;
   }
 
-  _updateGrenadeInput(dt) {
-    const inp = this.ctx.input;
-
-    this.nadeCd -= dt;
-    if (
-      inp.down('grenade') &&
-      this.grenades > 0 &&
-      this.nadeCd <= 0 &&
-      this.alive &&
-      !this.dashLock
-    ) {
-      this.nadeCharge = Math.min(1, this.nadeCharge + dt / 1.1);
-      this._nadeHeld = true;
-    } else if (this._nadeHeld) {
-      this._nadeHeld = false;
-      if (this.grenades > 0 && this.nadeCd <= 0 && this.alive)
-        this.throwGrenade(null, this.nadeCharge);
-      this.nadeCharge = 0;
-    }
-    this.updateNadeArc(this._nadeHeld ? this.nadeCharge : -1);
-    this.updateNades(dt);
-  }
-
   _updateWeaponInput(dt, sprinting, aiming, hs2) {
     const ctx = this.ctx,
       inp = ctx.input;
@@ -717,212 +740,7 @@ export class Player {
   }
   // ---- grenades: a lobbed ink bomb with a short fuse and a big orange blast ----
   // where a throw starts and how fast it leaves, for a given charge (0 = flick, 1 = full wind-up)
-  _nadeLaunch(charge, pos, vel) {
-    pos.copy(this.eye).addScaledVector(this.right, 0.25).addScaledVector(this.forward, 0.6);
-    pos.y -= 0.15;
-    vel
-      .copy(this.forward)
-      .multiplyScalar(9 + 20 * charge)
-      .addScaledVector(this.body.vel, 0.5);
-    vel.y += 3.5 + 2.5 * charge;
-  }
-  throwGrenade(remote = null, charge = 0) {
-    const ctx = this.ctx;
-    let pos, vel;
-    if (remote) {
-      pos = new THREE.Vector3().fromArray(remote.pos);
-      vel = new THREE.Vector3().fromArray(remote.vel);
-    } else {
-      this.grenades--;
-      this.nadeCd = 0.55;
-      pos = new THREE.Vector3();
-      vel = new THREE.Vector3();
-      this._nadeLaunch(charge, pos, vel);
-      this.weapon.recoil.kick(-0.4, 0.5, 1.2);
-      this.weapon.recoilRot.kick(-3, 0, -1.5);
-      this.ctx.audio.grappleFire();
-      ctx.input.rumble(0.2, 0.4, 50);
-      if (this.onThrow)
-        this.onThrow({
-          pos: pos.toArray().map((v) => +v.toFixed(2)),
-          vel: vel.toArray().map((v) => +v.toFixed(2)),
-        });
-    }
-    const g = new THREE.Group();
-    g.add(
-      new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), makeInkMaterial({ ink: INK.BLACK })),
-    );
-    const pin = new THREE.Mesh(
-      new THREE.TorusGeometry(0.07, 0.02, 4, 8),
-      makeInkMaterial({ ink: INK.ORANGE }),
-    );
-    pin.position.y = 0.2;
-    g.add(pin);
-    const cap = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.06, 0.1, 6),
-      makeInkMaterial({ ink: INK.ORANGE }),
-    );
-    cap.position.y = 0.17;
-    g.add(cap);
-    g.position.copy(pos);
-    ctx.scene.add(g);
-    ctx.resources.track(g);
-    this.nades.push({
-      mesh: g,
-      pos,
-      vel,
-      ang: new THREE.Vector3(rand(-6, 6), rand(-6, 6), rand(-6, 6)),
-      fuse: 1.7,
-      mine: !remote,
-      rest: false,
-      tick: 0,
-    });
-  }
-  updateNadeArc(charge) {
-    if (!this._arc) {
-      const dots = [];
-      const mat = makeInkMaterial({ ink: INK.BLACK, fill: true });
-      for (let i = 0; i < 26; i++) {
-        const m = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), mat);
-        m.visible = false;
-        this.ctx.scene.add(m);
-        this.ctx.resources.track(m);
-        dots.push(m);
-      }
-      const mark = new THREE.Mesh(
-        new THREE.TorusGeometry(0.55, 0.05, 5, 18),
-        makeInkMaterial({ ink: INK.ORANGE }),
-      );
-      mark.rotation.x = Math.PI / 2;
-      mark.visible = false;
-      this.ctx.scene.add(mark);
-      this.ctx.resources.track(mark);
-      this._arc = { dots, mark };
-    }
-    const A = this._arc;
-    if (charge < 0) {
-      if (A.shown) {
-        for (const d of A.dots) d.visible = false;
-        A.mark.visible = false;
-        A.shown = false;
-      }
-      return;
-    }
-    A.shown = true;
-    const world = this.ctx.world;
-    this._nadeLaunch(charge, _ap, _av);
-    let n = 0;
-    const step = 1 / 30;
-    for (let i = 0; i < 52 && n < A.dots.length; i++) {
-      _av.y -= 22 * step;
-      _aprev.copy(_ap);
-      _ap.addScaledVector(_av, step);
-      _ad.subVectors(_ap, _aprev);
-      const len = _ad.length();
-      if (len > 1e-6) {
-        _ad.divideScalar(len);
-        const hit = world.raycast(_aprev, _ad, len + 0.16);
-        if (hit) {
-          _ap.copy(hit.point).addScaledVector(hit.normal, 0.16);
-          const vn = _av.dot(hit.normal);
-          if (vn < 0) {
-            _av.addScaledVector(hit.normal, -1.45 * vn);
-            _av.multiplyScalar(0.55);
-          }
-          if (_av.length() < 1.2 && hit.normal.y > 0.5) break;
-        }
-      }
-      if (i % 2 === 0 && i >= 6) {
-        const d = A.dots[n++];
-        d.position.copy(_ap);
-        d.visible = true;
-        const k = 0.8 + charge * 0.6;
-        d.scale.setScalar(k);
-      }
-    }
-    for (let i = n; i < A.dots.length; i++) A.dots[i].visible = false;
-    A.mark.position.copy(_ap);
-    A.mark.position.y += 0.02;
-    A.mark.visible = true;
-    A.mark.scale.setScalar(0.8 + charge * 0.5);
-  }
-  updateNades(dt) {
-    const ctx = this.ctx,
-      world = ctx.world;
-    for (let i = this.nades.length - 1; i >= 0; i--) {
-      const n = this.nades[i];
-      n.fuse -= dt;
-      n.tick += dt;
-      if (!n.rest) {
-        n.vel.y -= 22 * dt;
-        _v2.copy(n.pos);
-        n.pos.addScaledVector(n.vel, dt);
-        _d.subVectors(n.pos, _v2);
-        const len = _d.length();
-        if (len > 1e-6) {
-          _d.divideScalar(len);
-          const hit = world.raycast(_v2, _d, len + 0.16);
-          if (hit) {
-            n.pos.copy(hit.point).addScaledVector(hit.normal, 0.16);
-            const vn = n.vel.dot(hit.normal);
-            if (vn < 0) {
-              n.vel.addScaledVector(hit.normal, -1.45 * vn);
-              n.vel.multiplyScalar(0.55);
-              n.ang.multiplyScalar(0.6);
-              this.ctx.audio.shell();
-            }
-            if (n.vel.length() < 1.2 && hit.normal.y > 0.5) {
-              n.rest = true;
-              n.vel.set(0, 0, 0);
-            }
-          }
-        }
-        n.mesh.rotation.x += n.ang.x * dt;
-        n.mesh.rotation.y += n.ang.y * dt;
-        n.mesh.rotation.z += n.ang.z * dt;
-        n.mesh.position.copy(n.pos);
-      }
-      // the fuse sparks faster as it runs out
-      if (
-        Math.floor(n.tick * (n.fuse < 0.8 ? 14 : 5)) !==
-        Math.floor((n.tick - dt) * (n.fuse < 0.8 ? 14 : 5))
-      )
-        ctx.effects.strokeBurst(n.pos.clone().add(_v.set(0, 0.22, 0)), INK.ORANGE, 2, 2.5, {
-          life: 0.12,
-          size: 0.02,
-        });
-      if (n.fuse <= 0) {
-        this.explodeNade(n);
-        ctx.resources.release(n.mesh);
-        this.nades.splice(i, 1);
-      }
-    }
-  }
-  explodeNade(n) {
-    const ctx = this.ctx,
-      R = 6.4,
-      c = n.pos.clone();
-    c.y += 0.25;
-    ctx.effects.boom(c, R);
-    this.ctx.audio.explosion(c);
-    ctx.input.rumble(0.9, 0.9, 220);
-    // bots: the thrower's client reports the damage (host applies it; a client's report is forwarded)
-    if (n.mine) ctx.enemies.blastEnemies(c, R, 120, null);
-    if (n.mine && ctx.blastBreakables) ctx.blastBreakables(c, R);
-    // me: my own grenade, or anyone else's that went off on my screen
-    const d = this.center.distanceTo(c);
-    if (this.alive && d < R * 0.95) {
-      this.takeDamage(10 + 34 * (1 - d / (R * 0.95)), c);
-      this.knockback(_v.subVectors(this.center, c).normalize(), 9);
-    }
-    // other players in a versus match, decided by the thrower only
-    if (n.mine && ctx.targets)
-      for (const t of ctx.targets()) {
-        if (t.isLocal || !t.alive || (ctx.canHurt && !ctx.canHurt(t))) continue;
-        const dd = t.center.distanceTo(c);
-        if (dd < R * 0.95) t.takeDamage(12 + 50 * (1 - dd / (R * 0.95)), c);
-      }
-  }
+
   _weaponState(sprinting, aiming, hs) {
     const inp = this.ctx.input,
       b = this.body;
@@ -1273,7 +1091,3 @@ export class Player {
     this.speed = sp3;
   }
 }
-const _ap = new THREE.Vector3(),
-  _av = new THREE.Vector3(),
-  _ad = new THREE.Vector3(),
-  _aprev = new THREE.Vector3();
