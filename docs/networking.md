@@ -70,6 +70,20 @@ All API JSON uses `no-store`. Unsupported methods return 405; missing provider c
 503; provider failure returns a redacted 502. The service bounds rate-limiter memory, coalesces
 provider calls and applies a 10 second upstream deadline.
 
+## Lobby and gameplay boundaries
+
+The committed-session transport owns its selected peer and player connections. `LobbyDiscovery`
+owns temporary signaling peers used to browse or choose a public lobby; only a successful explicit
+adoption transfers one into the session. `LobbyQuery` owns each operation's probe connections,
+listeners, overall deadline and gathering deadline. Cancellation, failure and completion clean up
+those resources; the selected connection's session consumer is installed before following packets
+can arrive. Browsing and quick play use the same query implementation.
+
+Gameplay messages retain the existing wire format but pass typed payload validation before routing,
+forwarding or handshake adoption. Snapshots have 11 or 14 finite values; vectors have exactly three.
+Roster sizes follow `MAX_PLAYERS`; tracer batches, strings, spawn/breakable indices, clock values
+and damage are bounded. These are input-safety contracts, not authentication or anti-cheat rules.
+
 ## Private runtime configuration
 
 | Variable                              | Meaning                                                                                |

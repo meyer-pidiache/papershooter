@@ -1,9 +1,11 @@
 import { Peer } from 'peerjs';
 import { networkConfig } from './config.js';
 import { createIceClient } from './ice-client.js';
-import { isWireMessage, lobbyCode, lobbyCount } from './protocol.js';
+import { isWireMessage, lobbyCode } from './protocol.js';
 import { MAX_PLAYERS } from '../domain/match.js';
 import { isGamePayload } from './game-messages.js';
+import { LobbyDiscovery, PUBLIC_SLOT_COUNT } from './lobby-discovery.js';
+import { LobbyQuery } from './lobby-query.js';
 
 // Peer-to-peer networking over WebRTC, using the public PeerJS signalling service.
 // The host player's browser is authoritative. A small same-origin endpoint obtains temporary
@@ -14,18 +16,12 @@ import { isGamePayload } from './game-messages.js';
 // every slot at once - a directory with no directory server. A connection only counts once the
 // host has answered with a welcome, so a full or closed lobby can be skipped for the next one.
 
-const PUBLIC_SLOTS = 16;
 const MAX_PUBLIC_SLOT_NETWORK_RETRIES = 5;
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const makeCode = () =>
   Array.from({ length: 5 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');
 const JOIN_TIMEOUT = 14000,
-  QUICK_TIMEOUT = 11000,
   SIGNAL_TIMEOUT = 12000;
-const idFromError = (err) => {
-  const m = /peer\s+(\S+)/.exec(String(err?.message || ''));
-  return m ? m[1] : null;
-};
 const defaults = networkConfig(
   import.meta.env,
   typeof location === 'undefined' ? 'localhost' : location.hostname,
@@ -61,6 +57,8 @@ export class Net {
     this.hostName = '';
     this.stats = { sent: 0, recv: 0 };
     this.isPublic = false;
+    this.sessionAbort = new AbortController();
+    this.discovery = new LobbyDiscovery(() => this._newPeer(null), this.prefix);
   }
   get active() {
     return !!this.peer && this.connected;
@@ -175,7 +173,7 @@ export class Net {
       this.peer = await this._newPeer(this.prefix + this.code);
     } else if (isPublic) {
       let networkRetries = 0;
-      for (let slot = 0; slot < PUBLIC_SLOTS;) {
+      for (let slot = 0; slot < PUBLIC_SLOT_COUNT;) {
         const slotCode = 'PUB' + slot;
         try {
           this.peer = await this._newPeer(this.prefix + slotCode);
@@ -313,314 +311,49 @@ export class Net {
       code,
       ...['-1', '-2', '-3'].map((suf) => base + suf).filter((c) => c !== code),
     ].map((c) => this.prefix + c);
-    let res;
     try {
-      res = await this._knockAny(ids, meta, JOIN_TIMEOUT);
-    } catch (e) {
+      await new LobbyQuery(this.peer, ids, meta, {
+        mode: 'first',
+        timeout: JOIN_TIMEOUT,
+        gather: 0,
+        signal: this.sessionAbort.signal,
+        adopt: (offer) => {
+          this.code = lobbyCode(offer.details.code, offer.hostId.slice(this.prefix.length));
+          this._adopt(offer.hostId, offer.connection, offer.details);
+        },
+      }).run();
+    } catch (error) {
       this.leave();
-      throw e;
+      throw error;
     }
-    const { hostId, conn, welcome } = res;
-    this._adopt(hostId, conn, welcome);
-    this.code = lobbyCode(welcome?.code, hostId.slice(this.prefix.length));
     return this.code;
   }
-  // try every public slot at the same time and take the first host that says welcome
+
   async quickJoin(meta = {}, onStatus = null) {
     this.leave();
     this.isHost = false;
-    this.peer = await this._newPeer(null);
-    this.id = this.peer.id;
-    this._keepAlive(this.peer);
-    if (onStatus) onStatus('looking for an open lobby…');
-    const ids = [];
-    for (let i = 0; i < PUBLIC_SLOTS; i++)
-      for (const suf of ['', '-1', '-2', '-3']) ids.push(this.prefix + 'PUB' + i + suf);
-    const winner = await new Promise((resolve) => {
-      let pending = ids.length,
-        done = false;
-      const attempts = [],
-        offers = [];
-      let gather = null;
-      const pick = () => {
-        if (!offers.length) return null;
-        offers.sort((a, b) => (b.welcome.players || 0) - (a.welcome.players || 0));
-        return offers[0];
-      };
-      const settle = () => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        clearTimeout(gather);
-        this.peer.off('error', onErr);
-        const val = pick();
-        for (const a of attempts)
-          if (!val || a.conn !== val.conn) {
-            try {
-              a.conn.close();
-            } catch (e) {
-              /* ignore */
-            }
-          }
-        resolve(val);
-      };
-      const failOne = (a) => {
-        if (a.done) return;
-        a.done = true;
-        pending--;
-        if (pending <= 0) settle();
-      };
-      const onErr = (err) => {
-        if (err && err.type === 'peer-unavailable') {
-          const a = attempts.find((x) => x.hostId === idFromError(err));
-          if (a) failOne(a);
-        }
-      };
-      this.peer.on('error', onErr);
-      const timer = setTimeout(settle, QUICK_TIMEOUT);
-      const probeMeta = { ...meta, probe: true };
-      for (const hostId of ids) {
-        let conn;
-        try {
-          conn = this.peer.connect(hostId, {
-            reliable: true,
-            serialization: 'json',
-            metadata: probeMeta,
-          });
-        } catch (e) {
-          pending--;
-          continue;
-        }
-        const a = { conn, hostId, done: false };
-        attempts.push(a);
-        conn.on('data', (msg) => {
-          if (!this._validMessage(msg) || a.done) return;
-          if (msg.t === 'welcome') {
-            a.done = true;
-            pending--;
-            offers.push({ conn, hostId, welcome: msg.d });
-            if (onStatus)
-              onStatus(`found ${offers.length} open ${offers.length === 1 ? 'lobby' : 'lobbies'}…`);
-            if (pending <= 0) settle();
-            else if (!gather) gather = setTimeout(settle, 1500);
-          } else if (msg.t === 'refused') failOne(a);
-        });
-        conn.on('error', () => failOne(a));
-        conn.on('close', () => failOne(a));
-      }
-      if (pending <= 0) settle();
-    });
-    if (!winner) {
+    try {
+      await this.discovery.join(
+        meta,
+        (peer, offer) => {
+          this.peer = peer;
+          this.id = peer.id;
+          this.code = lobbyCode(offer.details.code, offer.hostId.slice(this.prefix.length));
+          this._keepAlive(peer);
+          this._adopt(offer.hostId, offer.connection, offer.details);
+        },
+        onStatus,
+      );
+    } catch (error) {
       this.leave();
-      throw new Error('no open public lobbies');
+      throw error;
     }
-    winner.conn.send({ t: 'stay' });
-    this._adopt(winner.hostId, winner.conn, winner.welcome);
-    this.code = lobbyCode(winner.welcome?.code, winner.hostId.slice(this.prefix.length));
     return this.code;
   }
-  // knock on several ids at once; the first welcome wins, a refusal or a missing lobby on every one fails
-  // a look at every public lobby: who is hosting, how full, whether a match is on. Nothing is joined.
+
   async listLobbies(meta = {}, onStatus = null) {
     if (this.active) throw new Error('leave the lobby first');
-    const peer = await this._newPeer(null);
-    const ids = [];
-    for (let i = 0; i < PUBLIC_SLOTS; i++)
-      for (const suf of ['', '-1', '-2', '-3']) ids.push(this.prefix + 'PUB' + i + suf);
-    const found = await new Promise((resolve) => {
-      let pending = ids.length,
-        done = false;
-      const attempts = [],
-        offers = [];
-      let gather = null;
-      const settle = () => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        clearTimeout(gather);
-        peer.off('error', onErr);
-        for (const a of attempts) {
-          try {
-            a.conn.close();
-          } catch (e) {
-            /* ignore */
-          }
-        }
-        resolve(offers);
-      };
-      const failOne = (a) => {
-        if (a.done) return;
-        a.done = true;
-        pending--;
-        if (pending <= 0) settle();
-      };
-      const onErr = (err) => {
-        if (err && err.type === 'peer-unavailable') {
-          const a = attempts.find((x) => x.hostId === idFromError(err));
-          if (a) failOne(a);
-        }
-      };
-      peer.on('error', onErr);
-      const timer = setTimeout(settle, QUICK_TIMEOUT);
-      const probeMeta = { ...meta, probe: true };
-      for (const hostId of ids) {
-        let conn;
-        try {
-          conn = peer.connect(hostId, {
-            reliable: true,
-            serialization: 'json',
-            metadata: probeMeta,
-          });
-        } catch (e) {
-          pending--;
-          continue;
-        }
-        const a = { conn, hostId, done: false };
-        attempts.push(a);
-        conn.on('data', (msg) => {
-          if (!this._validMessage(msg) || a.done) return;
-          if (msg.t === 'welcome' || msg.t === 'refused') {
-            a.done = true;
-            pending--;
-            const d = msg.d || {};
-            offers.push({
-              id: hostId.slice(this.prefix.length),
-              code: lobbyCode(d.code, hostId.slice(this.prefix.length)),
-              players: lobbyCount(d.players),
-              max: lobbyCount(d.max, MAX_PLAYERS, 1),
-              inMatch: !!d.inMatch,
-              hostName: d.hostName || '',
-              full: msg.t === 'refused',
-            });
-            if (onStatus) onStatus(`found ${offers.length}…`);
-            if (pending <= 0) settle();
-            else if (!gather) gather = setTimeout(settle, 2200);
-          }
-        });
-        conn.on('error', () => failOne(a));
-        conn.on('close', () => failOne(a));
-      }
-      if (pending <= 0) settle();
-    });
-    try {
-      peer.destroy();
-    } catch (e) {
-      /* ignore */
-    }
-    // one lobby can answer on more than one id after a host change; keep the fuller answer per code
-    const byCode = new Map();
-    for (const o of found) {
-      const k = o.code.replace(/-\d+$/, '');
-      const prev = byCode.get(k);
-      if (!prev || o.players > prev.players) byCode.set(k, { ...o, code: k });
-    }
-    return [...byCode.values()].sort((a, b) => b.players - a.players);
-  }
-  _knockAny(ids, meta, timeoutMs) {
-    return new Promise((resolve, reject) => {
-      let pending = ids.length,
-        done = false,
-        lastErr = null;
-      const attempts = [];
-      const finish = (err, val) => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        this.peer.off('error', onErr);
-        for (const a of attempts)
-          if (!val || a.conn !== val.conn) {
-            try {
-              a.conn.close();
-            } catch (e) {
-              /* ignore */
-            }
-          }
-        if (val) resolve(val);
-        else reject(err || new Error('no lobby with that code'));
-      };
-      const failOne = (a, err) => {
-        if (a.done) return;
-        a.done = true;
-        if (err && !/no lobby/.test(String(err.message))) lastErr = err;
-        pending--;
-        if (pending <= 0) finish(lastErr || new Error('no lobby with that code'));
-      };
-      const onErr = (err) => {
-        if (err && err.type === 'peer-unavailable') {
-          const a = attempts.find((x) => x.hostId === idFromError(err));
-          if (a) failOne(a, new Error('no lobby with that code'));
-        }
-      };
-      this.peer.on('error', onErr);
-      const timer = setTimeout(() => finish(new Error('no answer from that lobby')), timeoutMs);
-      for (const hostId of ids) {
-        let conn;
-        try {
-          conn = this.peer.connect(hostId, {
-            reliable: true,
-            serialization: 'json',
-            metadata: meta,
-          });
-        } catch (e) {
-          pending--;
-          continue;
-        }
-        const a = { conn, hostId, done: false };
-        attempts.push(a);
-        conn.on('data', (msg) => {
-          if (!this._validMessage(msg) || a.done) return;
-          if (msg.t === 'welcome') {
-            a.done = true;
-            finish(null, { hostId, conn, welcome: msg.d });
-          } else if (msg.t === 'refused')
-            failOne(a, new Error((msg.d && msg.d.reason) || 'the lobby turned you away'));
-        });
-        conn.on('error', (e) =>
-          failOne(a, e instanceof Error ? e : new Error('could not connect')),
-        );
-        conn.on('close', () => failOne(a, null));
-      }
-      if (pending <= 0) finish(lastErr || new Error('no lobby with that code'));
-    });
-  }
-  _knock(hostId, meta, timeoutMs) {
-    return new Promise((resolve, reject) => {
-      let conn;
-      try {
-        conn = this.peer.connect(hostId, { reliable: true, serialization: 'json', metadata: meta });
-      } catch (e) {
-        return reject(new Error('could not start a connection'));
-      }
-      let done = false;
-      const finish = (err, val) => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        this.peer.off('error', onErr);
-        if (err) {
-          try {
-            conn.close();
-          } catch (e) {
-            /* ignore */
-          }
-          reject(err);
-        } else resolve(val);
-      };
-      const timer = setTimeout(() => finish(new Error('no answer from that lobby')), timeoutMs);
-      const onErr = (err) => {
-        if (err && err.type === 'peer-unavailable' && idFromError(err) === hostId)
-          finish(new Error('no lobby with that code'));
-      };
-      this.peer.on('error', onErr);
-      conn.on('data', (msg) => {
-        if (!this._validMessage(msg)) return;
-        if (msg.t === 'welcome') finish(null, { conn, welcome: msg.d });
-        else if (msg.t === 'refused')
-          finish(new Error((msg.d && msg.d.reason) || 'the lobby turned you away'));
-      });
-      conn.on('error', (e) => finish(e instanceof Error ? e : new Error('could not connect')));
-      conn.on('close', () => finish(new Error('the lobby closed the connection')));
-    });
+    return this.discovery.browse(meta, onStatus);
   }
   _adopt(hostId, conn, welcome) {
     this.hostId = hostId;
@@ -634,6 +367,9 @@ export class Net {
   }
   leave() {
     this.generation++;
+    this.sessionAbort.abort();
+    this.sessionAbort = new AbortController();
+    this.discovery.cancel();
     // closing our own connections must not look like other people leaving
     this.leaving = true;
     clearTimeout(this._aliasTimer);
