@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { isIP } from 'node:net';
 import type { ServerConfig } from './config.js';
 import { cachedCredentials, createProvider } from './providers.js';
 import type { TurnProvider } from './providers.js';
@@ -22,20 +23,29 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-export function clientIp(req: IncomingMessage, trustProxy: boolean): string {
-  // Enable only when the origin is private and the immediate proxy overwrites X-Real-IP.
-  const forwarded = req.headers['x-real-ip'];
-  if (trustProxy && typeof forwarded === 'string' && forwarded.trim()) return forwarded.trim();
+export function clientIp(req: IncomingMessage, trustProxy: boolean, header = 'x-real-ip'): string {
+  // Enable only when the origin is private and the immediate proxy overwrites the selected header.
+  const forwarded = req.headers[header];
+  if (trustProxy && typeof forwarded === 'string' && isIP(forwarded.trim()))
+    return forwarded.trim();
   return req.socket.remoteAddress || 'unknown';
 }
 
-export function createApiHandler(config: ServerConfig, dependencies: Dependencies = {}): HttpHandler {
-  const provider = dependencies.provider === undefined ? createProvider(config.provider) : dependencies.provider;
+export function createApiHandler(
+  config: ServerConfig,
+  dependencies: Dependencies = {},
+): HttpHandler {
+  const provider =
+    dependencies.provider === undefined ? createProvider(config.provider) : dependencies.provider;
   const credentials = provider ? cachedCredentials(provider, dependencies.now) : null;
   const limiter = dependencies.limiter ?? new RateLimiter();
   const log = dependencies.log ?? console.error;
 
-  async function handle(req: IncomingMessage, res: ServerResponse, next?: () => void): Promise<void> {
+  async function handle(
+    req: IncomingMessage,
+    res: ServerResponse,
+    next?: () => void,
+  ): Promise<void> {
     const path = (req.url || '/').split('?')[0];
     if (!['/healthz', '/api/ice-servers', '/api/turn-credentials'].includes(path)) {
       if (next) next();
@@ -52,16 +62,26 @@ export function createApiHandler(config: ServerConfig, dependencies: Dependencie
       sendJson(res, 405, { error: 'method_not_allowed' });
       return;
     }
-    if (path === '/healthz') { sendJson(res, 200, { status: 'ok' }); return; }
-    if (path === '/api/ice-servers') { sendJson(res, 200, { iceServers: config.stunServers }); return; }
-    if (!limiter.allow(clientIp(req, config.trustProxy))) {
+    if (path === '/healthz') {
+      sendJson(res, 200, { status: 'ok' });
+      return;
+    }
+    if (path === '/api/ice-servers') {
+      sendJson(res, 200, { iceServers: config.stunServers });
+      return;
+    }
+    if (!limiter.allow(clientIp(req, config.trustProxy, config.proxyHeader))) {
       res.setHeader('retry-after', '60');
       sendJson(res, 429, { error: 'rate_limited' });
       return;
     }
-    if (!credentials) { sendJson(res, 503, { error: 'turn_not_configured' }); return; }
-    try { sendJson(res, 200, await credentials()); }
-    catch {
+    if (!credentials) {
+      sendJson(res, 503, { error: 'turn_not_configured' });
+      return;
+    }
+    try {
+      sendJson(res, 200, await credentials());
+    } catch {
       // Provider errors may contain credentials or request headers. Never expose those details.
       log('TURN credential provider failed');
       sendJson(res, 502, { error: 'turn_credentials_unavailable' });

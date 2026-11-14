@@ -26,3 +26,16 @@ The original upstream rights/attribution notice remains applicable to inherited 
 - CI checked syntax and Compose; there was no gameplay test suite or coverage report.
 
 Final measurements and limitations belong in [quality.md](quality.md).
+
+## Completed structural work
+
+- Replaced copied libraries with the same Three.js/PeerJS versions under a frozen pnpm lock.
+- Extracted typed rules, physics/math, registry, configuration, credential adapters and application ports.
+- Separated application controllers, level kits, character models, projectiles, rendering and input.
+- Preserved all four seeded map/collision fingerprints and a recorded movement trace.
+- Made audio an application-owned resource and added cleanup for listeners, schedulers and GPU contexts.
+- Added provider-independent ICE, coturn credentials, trusted proxy configuration and bounded API limiting.
+- Protected host-only messages, sender identity, stale connection closes and cancelled lobby setup.
+- Corrected untrusted kill-feed/scoreboard HTML and an inherited blob-boss katana death crash.
+- Added static, Node/Compose and Vercel deployment paths; retained the existing loopback VPS port.
+- Added deterministic unit/integration tests, Chromium smoke tests, coverage imports and pinned CI actions.

@@ -1,0 +1,10 @@
+{
+  "sirv@3.0.2": {
+    "file": "sirv-3.0.2.txt",
+    "source": "https://github.com/lukeed/sirv/blob/1135207e92c40354543cbd15c763c7a61d79d432/license"
+  },
+  "@polka/url@1.0.0-next.29": {
+    "file": "polka-url-1.0.0-next.29.txt",
+    "source": "https://github.com/lukeed/polka/blob/02cbdb529ddca0a9f3d225e2abb2931924219cc3/license"
+  }
+}

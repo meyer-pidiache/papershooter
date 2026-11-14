@@ -1,0 +1,18 @@
+services:
+  dev:
+    build:
+      context: .
+      target: development
+    init: true
+    user: node
+    ports: ['127.0.0.1:5173:5173']
+    volumes:
+      - .:/app
+      - dependencies:/app/node_modules
+    env_file:
+      - path: .env
+        required: false
+    command: ['pnpm', 'dev', '--host', '0.0.0.0']
+
+volumes:
+  dependencies:

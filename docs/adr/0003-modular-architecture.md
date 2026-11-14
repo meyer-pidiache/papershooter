@@ -16,7 +16,8 @@ Adapters own browser persistence, PeerJS, HTTP and credential providers. Maps co
 construction kit and return the same level contract; reusable character geometry is independent of
 enemy behavior. Rendering, input and audio remain separate presentation/platform services.
 
-Use TypeScript strict mode for domain, configuration and backend boundaries. Retain JavaScript for
+Use TypeScript strict mode for domain, physics/math, map registry, configuration and backend boundaries.
+Retain JavaScript for
 the existing procedural engine and scene controllers during this behavior-preserving migration.
 Moving those files into typed contracts is incremental work, not achieved by renaming files or
 adding `any`/`ts-nocheck`. `allowJs` permits interoperation; `checkJs: false` means those JavaScript

@@ -9,13 +9,22 @@ files: the paper, the ink outlines, the hatching, the enemies and the music are 
 
 ## Running it
 
-It is a static site, so any web server works. Locally:
+Use Node 22.23.1 (see `.nvmrc`) and the pinned pnpm version:
 
 ```bash
-python3 serve.py 8910
+corepack enable
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-then open http://127.0.0.1:8910. On Vercel (or any static host) just deploy the folder as is.
+Open http://127.0.0.1:5173. Development reloads game code and styles through Vite.
+`pnpm build:client` produces `dist/` for any static HTTPS host. Solo and STUN-only multiplayer
+need no project API; temporary TURN credentials can use the optional Node/Vercel adapter.
+
+For the existing VPS workflow, configure `.env.example` and use `docker compose up --build -d`.
+See [deployment](docs/deployment.md) for static hosting, Vercel, nonroot container targets and the
+migration from the previous two-container deployment. [Development](docs/development.md) also
+covers the optional container environment.
 
 ## Modes
 
@@ -24,42 +33,37 @@ then open http://127.0.0.1:8910. On Vercel (or any static host) just deploy the 
   regenerates after a few seconds out of combat (not while sprinting), so only ammo drops in.
 
 Multiplayer uses PeerJS for signaling and WebRTC for player connections. Players connect directly
-when their networks allow it; the Docker setup can request short-lived Cloudflare TURN credentials
+when their networks allow it; the optional credential service can issue short-lived TURN credentials
 so restrictive networks can relay traffic. Under PLAY ONLINE you can Quick Play (joins an open
 public lobby, or opens one for you), create a public or private lobby, or join a friend's lobby with
 their five letter code. People can join a match already in progress. The host's browser keeps score;
 each player runs their own body.
 
-### ICE server configuration for Docker
+### Networking configuration
 
-Create a Realtime TURN key in Cloudflare, copy `.env.example` to `.env`, and set
-`CF_TURN_KEY_ID` and `CF_TURN_API_TOKEN` to the values for that key. Compose keeps them only in the
-private credential API container; the browser receives expiring ICE credentials from
-`/api/turn-credentials`. Do not commit `.env` or put the TURN API token in browser code. Rebuild
-with `docker compose up --build -d` after changing the key.
-
-Set `PAPERSHOOT_STUN_SERVERS` in `.env` to a comma-separated list of STUN URLs. `.env.example`
-contains Cloudflare's public STUN URL as a starting value; replace it with any STUN service you
-control or prefer. An empty value disables STUN servers. The URLs are served by the same-origin ICE
-configuration endpoint, while TURN credentials remain private and short-lived.
+STUN URLs, TURN credential endpoints and PeerServer signaling are configurable. The browser
+connects to STUN/TURN directly; the optional credential service keeps private provider keys out of
+browser code. It supports Cloudflare and coturn-compatible temporary credentials, or you can point
+the frontend at another HTTPS provider adapter. See [networking](docs/networking.md) and
+[.env.example](.env.example) for the public/private variables and deployment defaults.
 
 ## Controls
 
-| Action | Mouse + keyboard | PS5 controller |
-| --- | --- | --- |
-| Move / look / sprint | WASD, mouse, Shift | L stick, R stick, L3 |
-| Fire / slash | LMB | R2 |
-| Aim / block (katana) | RMB | L2 |
-| Jump, wall jump, double jump | Space | ✕ |
-| Slide, air dash | C / Ctrl (X, Alt) | ○ |
-| Grapple (hold to reel) | Q / E | L1 |
-| Quick katana slash | F | R1 |
-| Reload | R | □ |
-| Grenade (hold to throw further) | G | R3 or d-pad up |
-| Katana dash (gauge lit) | both mouse buttons or X | L2 + R2 |
-| Weapons | 1-4 / wheel | △, d-pad |
-| Scoreboard (online) | Tab | Create |
-| Menu | Esc | Options |
+| Action                          | Mouse + keyboard        | PS5 controller       |
+| ------------------------------- | ----------------------- | -------------------- |
+| Move / look / sprint            | WASD, mouse, Shift      | L stick, R stick, L3 |
+| Fire / slash                    | LMB                     | R2                   |
+| Aim / block (katana)            | RMB                     | L2                   |
+| Jump, wall jump, double jump    | Space                   | ✕                    |
+| Slide, air dash                 | C / Ctrl (X, Alt)       | ○                    |
+| Grapple (hold to reel)          | Q / E                   | L1                   |
+| Quick katana slash              | F                       | R1                   |
+| Reload                          | R                       | □                    |
+| Grenade (hold to throw further) | G                       | R3 or d-pad up       |
+| Katana dash (gauge lit)         | both mouse buttons or X | L2 + R2              |
+| Weapons                         | 1-4 / wheel             | △, d-pad             |
+| Scoreboard (online)             | Tab                     | Create               |
+| Menu                            | Esc                     | Options              |
 
 On-screen hints follow whichever device you touched last.
 
@@ -99,14 +103,23 @@ The scene renders to a buffer holding shade, an ink id and view-space normals pl
 A post pass draws outlines from an inverse-depth Laplacian, adds surface-following hatching, paper
 grain, ruled lines and the red margin. Wobble is static so nothing flickers.
 
-## Development
+## Engineering and contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, Git hooks, commit conventions, and the
-rebase-based trunk workflow.
+The application separates game rules, controllers, map construction, rendering, browser adapters
+and network transports. Physics/math and external contracts use TypeScript strict mode; existing
+procedural gameplay/graphics remain JavaScript during the documented incremental migration.
+
+- [Architecture and reusable map/model kits](docs/architecture.md)
+- [Technical decisions and evaluated alternatives](docs/adr/README.md)
+- [Tests, coverage and remaining verification limits](docs/quality.md)
+- [Contributing, Git hooks and the trunk/rebase workflow](CONTRIBUTING.md)
+
+Run `pnpm check` for architecture, types, lint, tests and builds; `pnpm test:coverage` writes LCOV for
+SonarCloud. CI also checks formatting, Chromium gameplay smoke tests and all container targets.
 
 ## License and attribution
 
 This fork is based on [iifor/doodleshooter](https://github.com/iifor/doodleshooter). The PolyForm
 Noncommercial terms in [LICENSE.md](LICENSE.md) apply only to original contributions by Meyer
-Pidiache in this fork. They do not grant rights to inherited upstream code or vendored dependencies;
+Pidiache in this fork. They do not grant rights to inherited upstream code or third-party dependencies;
 see [NOTICE.md](NOTICE.md).

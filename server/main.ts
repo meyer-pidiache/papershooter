@@ -11,19 +11,26 @@ const staticFiles = sirv(resolve(process.env.STATIC_DIR || 'dist'), {
   setHeaders(res, path) {
     res.setHeader('x-content-type-options', 'nosniff');
     res.setHeader('referrer-policy', 'strict-origin-when-cross-origin');
-    res.setHeader('cache-control', path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache');
+    res.setHeader(
+      'cache-control',
+      path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+    );
   },
 });
 
 const server = createServer((req, res) => {
-  api(req, res, () => staticFiles(req, res, () => {
-    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-    res.end('Not found');
-  }));
+  api(req, res, () =>
+    staticFiles(req, res, () => {
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end('Not found');
+    }),
+  );
 });
 server.requestTimeout = 15000;
 server.headersTimeout = 10000;
-server.listen(config.port, config.host, () => console.log(`Paper Shooter listening on ${config.host}:${config.port}`));
+server.listen(config.port, config.host, () =>
+  console.log(`Paper Shooter listening on ${config.host}:${config.port}`),
+);
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.once(signal, () => {
     server.close();

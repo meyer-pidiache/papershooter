@@ -1,4 +1,7 @@
-interface Entry { start: number; count: number }
+interface Entry {
+  start: number;
+  count: number;
+}
 
 /** Fixed-window limiter with bounded memory. Deploy an edge limit for multiple instances. */
 export class RateLimiter {
@@ -10,7 +13,9 @@ export class RateLimiter {
     private readonly now: () => number = Date.now,
   ) {}
 
-  get size(): number { return this.entries.size; }
+  get size(): number {
+    return this.entries.size;
+  }
 
   allow(key: string): boolean {
     const now = this.now();
@@ -21,7 +26,8 @@ export class RateLimiter {
     }
     if (!entry) {
       if (this.entries.size >= this.maxEntries) {
-        for (const [ip, value] of this.entries) if (now - value.start >= this.windowMs) this.entries.delete(ip);
+        for (const [ip, value] of this.entries)
+          if (now - value.start >= this.windowMs) this.entries.delete(ip);
       }
       if (this.entries.size >= this.maxEntries) return false;
       entry = { start: now, count: 0 };
