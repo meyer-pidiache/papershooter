@@ -6,7 +6,7 @@ import {
   DASH_SPEED,
 } from '../domain/focus.js';
 import * as THREE from 'three';
-import { INK } from '../presentation/renderer.js';
+import { INK } from '../shared/ink.js';
 import { clamp } from '../engine/math.js';
 
 export function createFocus(runtime, actions = {}) {

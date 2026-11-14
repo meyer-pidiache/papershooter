@@ -1,6 +1,7 @@
 // Enemy projectile simulation, hit detection and instanced rendering.
 import * as THREE from 'three';
-import { makeInkMaterial, INK } from '../presentation/renderer.js';
+import { makeInkMaterial } from '../presentation/ink/materials.js';
+import { INK } from '../shared/ink.js';
 import { SEE_THROUGH } from '../engine/physics.js';
 import { clamp } from '../engine/math.js';
 

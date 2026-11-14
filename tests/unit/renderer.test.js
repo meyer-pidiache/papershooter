@@ -16,13 +16,9 @@ vi.mock('three', async (original) => {
   return { ...actual, WebGLRenderer: RendererBoundary };
 });
 
-import {
-  InkRenderer,
-  makeInkMaterial,
-  setFill,
-  setInk,
-  INK,
-} from '../../src/presentation/renderer.js';
+import { InkRenderer } from '../../src/presentation/renderer.js';
+import { makeInkMaterial, setFill, setInk } from '../../src/presentation/ink/materials.js';
+import { INK } from '../../src/shared/ink.js';
 
 it('wires the ink/depth pass and paper post pass with camera and effect uniforms', () => {
   const renderer = new InkRenderer(document.createElement('canvas'));
@@ -51,4 +47,31 @@ it('wires the ink/depth pass and paper post pass with camera and effect uniforms
   renderer.dispose();
   expect(boundary.dispose).toHaveBeenCalledOnce();
   expect(boundary.forceContextLoss).toHaveBeenCalledOnce();
+});
+
+it('keeps frame uniforms and palette values owned by each renderer', () => {
+  const first = new InkRenderer(document.createElement('canvas'));
+  const second = new InkRenderer(document.createElement('canvas'));
+  const material = makeInkMaterial();
+  try {
+    first.camera.rotation.y = 0.25;
+    second.camera.rotation.y = 1;
+    first.render(10);
+    material.onBeforeRender(first.renderer, first.scene, first.camera);
+    const firstLight = material.uniforms.uLightDir;
+    const firstValue = firstLight.value.clone();
+    expect(material.uniforms.uTime.value).toBe(10);
+    second.render(20);
+    material.onBeforeRender(second.renderer, second.scene, second.camera);
+    expect(material.uniforms.uTime.value).toBe(20);
+    expect(material.uniforms.uLightDir).not.toBe(firstLight);
+    expect(firstLight.value.equals(firstValue)).toBe(true);
+    material.onBeforeRender(first.renderer, first.scene, first.camera);
+    expect(material.uniforms.uTime.value).toBe(10);
+    expect(first.post.uniforms.uInks.value[0]).not.toBe(second.post.uniforms.uInks.value[0]);
+  } finally {
+    material.dispose();
+    first.dispose();
+    second.dispose();
+  }
 });

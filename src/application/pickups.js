@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { INK, makeInkMaterial } from '../presentation/renderer.js';
+import { makeInkMaterial } from '../presentation/ink/materials.js';
+import { INK } from '../shared/ink.js';
 import { rand, choose } from '../engine/math.js';
 
 export function createPickups(runtime, actions = {}) {

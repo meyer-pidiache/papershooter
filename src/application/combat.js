@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { INK } from '../presentation/renderer.js';
+import { INK } from '../shared/ink.js';
 import { rand, clamp } from '../engine/math.js';
 
 export function createCombat(runtime, actions = {}) {

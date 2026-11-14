@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { makeInkMaterial, INK } from '../renderer.js';
+import { makeInkMaterial } from '../ink/materials.js';
+import { INK } from '../../shared/ink.js';
 import { rand, TAU } from '../../engine/math.js';
 
 // ---------------- doodle model kit ----------------

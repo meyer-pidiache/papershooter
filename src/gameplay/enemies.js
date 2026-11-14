@@ -1,6 +1,7 @@
 // Enemies: doodle humanoids (asdf-style stick figures with faces), flyers, bombers, shield bearers and a boss.
 import * as THREE from 'three';
-import { makeInkMaterial, setFill, INK } from '../presentation/renderer.js';
+import { makeInkMaterial, setFill } from '../presentation/ink/materials.js';
+import { INK } from '../shared/ink.js';
 import { makeBody, SEE_THROUGH } from '../engine/physics.js';
 import {
   rand,

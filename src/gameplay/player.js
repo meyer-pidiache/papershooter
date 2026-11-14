@@ -1,7 +1,8 @@
 // First-person player: movement (sprint/slide/wall-jump/mantle/air dash), swing-grapple, camera feel, health, weapons.
 import * as THREE from 'three';
 import { makeBody } from '../engine/physics.js';
-import { makeInkMaterial, INK } from '../presentation/renderer.js';
+import { makeInkMaterial } from '../presentation/ink/materials.js';
+import { INK } from '../shared/ink.js';
 import { Rifle, Shotgun, Sniper, Katana } from './weapons.js';
 // the dome shell and anything else flagged this way cannot be hooked
 const NO_GRAPPLE = (b) => !!b.data.noGrapple;

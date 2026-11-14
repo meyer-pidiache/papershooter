@@ -1,6 +1,7 @@
 // Particles (ink droplets/strokes), decals (blood splats, bullet holes), rigid gibs, tracers.
 import * as THREE from 'three';
-import { makeInkMaterial, INK } from './renderer.js';
+import { makeInkMaterial } from './ink/materials.js';
+import { INK } from '../shared/ink.js';
 import { rand, randInt, clamp, lerp, TAU } from '../engine/math.js';
 import { SEE_THROUGH } from '../engine/physics.js';
 import { SceneResources } from '../engine/resources.js';

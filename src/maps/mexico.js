@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { makeInkMaterial, INK } from '../presentation/renderer.js';
+import { makeInkMaterial } from '../presentation/ink/materials.js';
+import { INK } from '../shared/ink.js';
 import { rand, TAU } from '../engine/math.js';
 import { buildHumanoid } from '../presentation/models/characters.js';
 

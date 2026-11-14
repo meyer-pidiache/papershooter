@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { makeInkMaterial, INK } from '../presentation/renderer.js';
+import { makeInkMaterial } from '../presentation/ink/materials.js';
+import { INK } from '../shared/ink.js';
 
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 

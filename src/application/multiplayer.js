@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { INK } from '../presentation/renderer.js';
+import { INK } from '../shared/ink.js';
 import { RemotePlayer, encodeLocal } from '../gameplay/remote-player.js';
 import { knownMap } from '../domain/maps';
 import { FFA_TIME, formatClock as mmss } from '../domain/match';

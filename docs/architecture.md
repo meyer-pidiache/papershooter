@@ -72,6 +72,10 @@ separate decision and regression baseline.
   renderers and audio contexts. Reusable vectors and pools remain in frame-sensitive code.
 - Small controller factories coordinate effects and state through explicit actions. Provider and
   browser adapters isolate external APIs. There is no global audio singleton.
+- Ink materials are reusable without importing renderer lifecycle. Each renderer owns its palette
+  and frame uniforms; material draw hooks bind that renderer's frame without sharing mutable
+  lighting/time between application instances. Frame calculations run once per render, with no
+  per-material lighting transform or per-frame object allocation introduced by the binding.
 - Composition replaces an inheritance hierarchy for application services. The existing weapon/view
   model hierarchy remains where it already models shared behavior; an ECS is not introduced.
 

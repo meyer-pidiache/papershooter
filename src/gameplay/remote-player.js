@@ -3,7 +3,8 @@
 // target (body, center, eye, hit spheres, takeDamage) so the rest of the game does not care
 // whether it is shooting at a bot or a friend.
 import * as THREE from 'three';
-import { makeInkMaterial, setFill, INK } from '../presentation/renderer.js';
+import { makeInkMaterial, setFill } from '../presentation/ink/materials.js';
+import { INK } from '../shared/ink.js';
 import { buildHumanoid, buildWeaponProp } from '../presentation/models/characters.js';
 import { clamp, damp, angleLerp } from '../engine/math.js';
 
