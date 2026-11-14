@@ -2,6 +2,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import ts from 'typescript';
 
+const comparePaths = (left, right) => left.localeCompare(right);
+
 export function sourceFiles(directory) {
   return readdirSync(directory, { withFileTypes: true })
     .flatMap((entry) => {
@@ -9,7 +11,7 @@ export function sourceFiles(directory) {
       if (entry.isDirectory()) return sourceFiles(path);
       return /\.(js|ts)$/.test(path) && !path.endsWith('.d.ts') ? [path] : [];
     })
-    .sort();
+    .sort(comparePaths);
 }
 
 function resolveImport(file, specifier) {
@@ -63,7 +65,7 @@ export function analyzeModule(file) {
   return {
     file,
     physicalLines: text.split(/\r?\n/).length - Number(text.endsWith('\n')),
-    dependencies: [...dependencies].sort(),
+    dependencies: [...dependencies].sort(comparePaths),
     missing,
   };
 }
