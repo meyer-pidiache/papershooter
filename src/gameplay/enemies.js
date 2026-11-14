@@ -1041,7 +1041,7 @@ export class EnemyManager {
             const an = (i / 24) * TAU;
             _v.set(b.pos.x + Math.cos(an) * 3, b.pos.y + 0.3, b.pos.z + Math.sin(an) * 3);
             _v2.set(Math.cos(an) * 14, 2, Math.sin(an) * 14);
-            ctx.effects._spawn('stroke', _v, _v2, {
+            ctx.effects.particle('stroke', _v, _v2, {
               size: 0.06,
               life: 0.4,
               ink: INK.BLACK,
