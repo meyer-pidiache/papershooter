@@ -1,0 +1,22 @@
+{
+  "rifle": {
+    "geometry": "6f48f2ca9554fbd099d98ef6e3090f38542017ce6e460dcf1f05ea22c82f4bc7",
+    "animation": "180d9fb45258bcd47781c1fa2fbd6f22d61021c1deda027a521cf73439352464"
+  },
+  "shotgun": {
+    "geometry": "39460eb956e601890f30fe5da5173bcbc874662431934fcfc6a8749e12d1b2d4",
+    "animation": "10beea727ceb2de9e7d212f30ce314bb0dcd97f4fbddd1f6e7daa0d6f7c9d5e9"
+  },
+  "sniper": {
+    "geometry": "34a32083b2f9db27ad69ce0fe69c3fd1f7d9038dc3ad24c0bd59f4d52e253570",
+    "animation": "2f36c95abdabeab90e38d6a9adf97644ab42dd37f7a70b7629cf7f7eb23c89bd"
+  },
+  "revolver": {
+    "geometry": "a253a57b891b95fe56e9b167afc904c822b7430f8725f16035b5a83e6d5efcdb",
+    "animation": "ecf327d684bf2a871c4d8a4ddedf8baaa3a876c9f649a0cf5659392b8fa67961"
+  },
+  "katana": {
+    "geometry": "1ea2aceb90fc2759332546cc27da18ddc2ee97f42e8ce87f72de300285f24917",
+    "animation": "00c2b064d8aeff69bb4529e76abd7927cf84767a3e9cc194941194be3226e391"
+  }
+}
