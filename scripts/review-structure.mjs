@@ -3,8 +3,9 @@ import { ESLint } from 'eslint';
 import { projectModules, projectPath } from './source-analysis.mjs';
 
 // Review thresholds, not claims that existing debt is acceptable. See docs/engineering-standard.md.
+const moduleCodeLineLimit = 300;
 const reviewRules = {
-  'max-lines': ['warn', { max: 400, skipBlankLines: true, skipComments: true }],
+  'max-lines': ['warn', { max: moduleCodeLineLimit, skipBlankLines: true, skipComments: true }],
   'max-lines-per-function': ['warn', { max: 100, skipBlankLines: true, skipComments: true }],
   complexity: ['warn', 15],
   'max-depth': ['warn', 3],
@@ -36,6 +37,7 @@ const markdown = [
   '',
   'Advisory findings. Counts do not prove cohesion or cover runtime callback/state coupling.',
   'Physical lines include comments and blank lines. ESLint size limits exclude them.',
+  `Module review threshold: more than ${moduleCodeLineLimit} code lines, excluding blank and comment-only lines.`,
   'Imports include local type imports, literal dynamic imports and re-exports; incoming counts are unique importing modules.',
   '',
   '| Module | Physical lines | Local imports | Incoming | Findings |',
@@ -55,10 +57,13 @@ const markdown = [
   '',
 ];
 mkdirSync('reports', { recursive: true });
-writeFileSync('reports/structure.json', JSON.stringify({ summary, modules: rows }, null, 2) + '\n');
+writeFileSync(
+  'reports/structure.json',
+  JSON.stringify({ moduleCodeLineLimit, summary, modules: rows }, null, 2) + '\n',
+);
 writeFileSync('reports/structure.md', markdown.join('\n'));
 console.log(
-  `${rows.length} product modules; ${rows.filter((row) => row.physicalLines > 400).length} exceed 400 physical lines.`,
+  `${rows.length} product modules; ${summary['max-lines'] ?? 0} exceed ${moduleCodeLineLimit} code lines (excluding blank/comment-only lines).`,
 );
 console.log(JSON.stringify(summary));
 console.log(

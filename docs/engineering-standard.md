@@ -1,24 +1,33 @@
 # Engineering standard
 
-Status: adopted review policy, 2026-11-14. See [ADR 0006](adr/0006-maintainability-standard.md).
+Status: adopted review policy, 2026-11-14. See [ADR 0006](adr/0006-maintainability-standard.md) and
+the researched module-size revision in [ADR 0007](adr/0007-module-size-threshold.md).
 These are project choices, not a universal definition of professional code.
 
 ## Size and complexity
 
-| Measure                 | Preferred target                  | Required review signal                                             |
-| ----------------------- | --------------------------------- | ------------------------------------------------------------------ |
-| Module size             | At most 300 code lines            | More than 400 code lines                                           |
-| Function or method size | At most 60 code lines             | More than 100 code lines                                           |
-| Cyclomatic complexity   | At most 10                        | More than 15                                                       |
-| Cognitive complexity    | Keep control flow straightforward | Sonar S3776 findings; review separately from cyclomatic complexity |
-| Control-flow nesting    | At most 3 levels                  | More than 3                                                        |
-| Positional parameters   | At most 5                         | More than 5; consider a named contract                             |
+| Measure                 | Preferred target                                  | Required review signal                                             |
+| ----------------------- | ------------------------------------------------- | ------------------------------------------------------------------ |
+| Module size             | One cohesive responsibility within 300 code lines | More than 300 code lines                                           |
+| Function or method size | At most 60 code lines                             | More than 100 code lines                                           |
+| Cyclomatic complexity   | At most 10                                        | More than 15                                                       |
+| Cognitive complexity    | Keep control flow straightforward                 | Sonar S3776 findings; review separately from cyclomatic complexity |
+| Control-flow nesting    | At most 3 levels                                  | More than 3                                                        |
+| Positional parameters   | At most 5                                         | More than 5; consider a named contract                             |
 
 Code-line counts use ESLint with blank and comment-only lines excluded. Physical lines, including
 comments and whitespace, are also reported for navigation. Embedded strings count toward size:
 they can make a file difficult to navigate even when they are not executable JavaScript. These
 counts do not measure semantic coupling. A 200-line module with broad mutable dependencies can be
 harder to maintain than a cohesive 450-line module.
+
+The 300-line review threshold replaces the insufficiently justified 400-line threshold. It is a
+provisional engineering convention: ESLint uses the same numeric default, and the local comparison
+in ADR 0007 shows what 200/300/400/600 flag. It is not an experimentally established optimum. There
+is no additional 400-line allowance. Files above 300 require review or a documented content
+exception; smaller files still require cohesion and contract review. Reassess the policy after the
+next two structural PRs using actual review effort and useful/noisy findings, not warning counts
+alone.
 
 A review signal requires either a cohesive extraction or a written exception. New behavioral
 modules should stay below the review thresholds. Do not create `part1`/`part2` files, remove useful
@@ -92,7 +101,8 @@ enabled and does not replace architectural review.
 ## Evidence and interpretation
 
 - [ESLint max-lines](https://eslint.org/docs/latest/rules/max-lines) explicitly does not establish
-  an objective universal file-size limit. The 300/400 thresholds above are this project's policy.
+  an objective universal file-size limit. Its numeric default is 300; our blank/comment exclusions
+  are explicit project settings. ADR 0007 explains the local choice and the research limitations.
 - [ESLint max-lines-per-function](https://eslint.org/docs/latest/rules/max-lines-per-function)
   explains why function length and control-flow complexity reveal different concerns.
 - [ESLint complexity](https://eslint.org/docs/latest/rules/complexity) measures execution paths;

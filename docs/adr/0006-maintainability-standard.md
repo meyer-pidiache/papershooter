@@ -1,6 +1,7 @@
 # 0006: Review size, complexity and semantic coupling together
 
-Date: 2026-11-14. Status: accepted.
+Date: 2026-11-14. Status: accepted; the module-size decision below is superseded by
+[ADR 0007](0007-module-size-threshold.md). Other review criteria remain unchanged.
 
 ## Context
 
@@ -10,6 +11,9 @@ runtime and call one another through callbacks. A clean import graph and a passi
 gate do not prove those runtime dependencies are narrow.
 
 ## Decision
+
+This section records the initial policy. The separate 400-line allowance lacked adequate
+justification; ADR 0007 replaces it after a source review and local threshold comparison.
 
 Adopt the [engineering standard](../engineering-standard.md): prefer modules up to 300 code lines
 and functions up to 60; require review above 400 and 100 respectively. Review cyclomatic complexity
