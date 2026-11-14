@@ -6,6 +6,7 @@ dist-server/
 coverage/
 playwright-report/
 test-results/
+reports/
 .scannerwork/
 .pnpm-store/
 .env

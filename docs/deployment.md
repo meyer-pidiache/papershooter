@@ -50,9 +50,10 @@ values requires container recreation; changing browser `VITE_*` variables requir
 
 The multi-stage build pins base image digests, installs the locked dependencies once, compiles the
 frontend/server and copies only runtime artifacts. The `app` target runs as `node`, drops
-capabilities, uses a read-only filesystem and has a health check. It contains no `node_modules`,
-compiler, repository metadata or provider `.env` file. Debian slim retains glibc compatibility for
-Node. See [ADR 0004](adr/0004-deployment.md) for the alternatives.
+capabilities, uses a read-only filesystem and has a health check. It contains no application
+`node_modules`, build toolchain, repository metadata or provider `.env` file. The Node base still
+includes its own package-manager tools. Debian slim retains glibc compatibility for Node. See
+[ADR 0004](adr/0004-deployment.md) for the alternatives.
 
 ## Static container
 

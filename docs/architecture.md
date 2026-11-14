@@ -37,8 +37,10 @@ flowchart TD
 | `src/application`  | Composition, shared session state, controller actions and scheduling             | —                                     |
 | `server`           | HTTP handling, runtime configuration, rate limiting and provider adapters        | Browser application and rendering     |
 
-`pnpm architecture` checks allowed imports, missing relative modules and import cycles. It is also
-part of hooks and CI. Runtime callbacks between controllers are supplied explicitly by composition;
+`pnpm architecture` checks allowed imports, missing relative modules and import cycles across
+browser, server and API modules, including literal dynamic imports and re-exports. It is part of
+hooks and CI. It does not detect semantic cycles through runtime callbacks or shared mutable state.
+Runtime callbacks between controllers are supplied explicitly by composition;
 controllers do not import each other. `ApplicationOptions` defines replaceable rendering, input,
 storage, audio and network adapters for embedding and integration tests.
 
@@ -72,6 +74,18 @@ configuration and backend. Existing procedural graphics, gameplay and controller
 under `allowJs` with `checkJs: false`; those modules are **not** fully statically checked. Tests and
 coverage include them. This is an explicit incremental typing decision, not a completed conversion
 of every source file. See [ADR 0003](adr/0003-modular-architecture.md).
+
+## Remaining decomposition
+
+The player and enemy modules still contain large stateful implementations. Player update phases
+are named, but movement abilities, equipment and damage state still share one class. Enemy geometry,
+data and projectiles are separate, while archetype behavior, animation and damage processing remain
+in the manager module. These are candidates for extraction behind the existing gameplay contracts
+and regression tests. File length is a review signal; splitting by an arbitrary line limit does not
+replace cohesive responsibilities or explicit state ownership. A passed coverage/quality gate is
+not proof that this remaining architecture work is finished. The
+[manual review](reviews/2026-11-14-refactor.md) inventories additional coupling below and above the
+[engineering standard's](engineering-standard.md) size thresholds.
 
 ## Adding a map
 

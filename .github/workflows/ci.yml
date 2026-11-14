@@ -37,6 +37,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm architecture
+      - run: pnpm review:structure
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format:check
@@ -51,6 +52,7 @@ jobs:
           path: |
             coverage/
             test-results/
+            reports/
           retention-days: 7
 
   containers:

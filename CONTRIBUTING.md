@@ -19,6 +19,9 @@ pnpm dev
 Open `http://127.0.0.1:5173`. See [development](docs/development.md) for commands, browser setup,
 container development and dependency/license updates. Read [architecture](docs/architecture.md)
 before moving responsibilities across modules and record technical changes in an ADR.
+Follow the [engineering standard](docs/engineering-standard.md) for module/function size,
+complexity, ownership and narrow contracts. Run `pnpm review:structure` when changing boundaries;
+its reports are advisory and still require architectural review and justified exceptions.
 
 Never commit `.env`, provider API tokens, signing secrets or permanent TURN credentials. Only public
 frontend configuration receives the `VITE_` prefix. The optional server reads private values at

@@ -11,6 +11,8 @@ Baseline: `c74df47` on `main`. Work branch: `refactor/maintainable-game-architec
 5. Extract shared map/model kits and application systems without changing map content or game balance.
 6. Expand tests, measure coverage, connect LCOV to Sonar and pin CI actions.
 7. Build deployment targets, document operations and record actual verification results.
+8. Review remaining size, complexity and semantic coupling; record the next extraction priorities
+   and adopt a documented engineering standard with reproducible advisory reports.
 
 Use focused commits in this single branch. Dependency upgrades and map redesign are separate work.
 The original upstream rights/attribution notice remains applicable to inherited source.
@@ -26,6 +28,8 @@ The original upstream rights/attribution notice remains applicable to inherited 
 - CI checked syntax and Compose; there was no gameplay test suite or coverage report.
 
 Final measurements and limitations belong in [quality.md](quality.md).
+The [manual review](reviews/2026-11-14-refactor.md) records open findings. The passing automated
+gate does not close those findings or complete the remaining gameplay/controller decomposition.
 
 ## Completed structural work
 

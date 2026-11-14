@@ -5,6 +5,8 @@
 - [Networking](networking.md): signaling, ICE, providers and the optional credential service.
 - [Deployment](deployment.md): static hosting, VPS, Compose and Vercel.
 - [Testing and quality](quality.md): coverage scope, security review and verification results.
+- [Engineering standard](engineering-standard.md): size, complexity, coupling and review policy.
+- [Refactor review](reviews/2026-11-14-refactor.md): prioritized remaining issues and module inventory.
 - [Refactor work record](refactor.md): sequence and behavioral baseline.
 - [Architecture decision records](adr/README.md): evaluated alternatives and tradeoffs.
 

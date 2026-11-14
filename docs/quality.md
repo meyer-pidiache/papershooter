@@ -17,16 +17,16 @@ Branch coverage is reported separately and still has room to improve in combat, 
 failure paths. Do not describe line coverage as branch coverage or lower Sonar's gate to hide a
 missing report. Sonar's own new-code/condition calculations can differ from the local total.
 
-Local milestone on 2026-11-14, before the final CI scan:
+Local measurement on 2026-11-14 after the asynchronous-failure regressions and unused-code cleanup:
 
-| Metric                      | Result                                                     |
-| --------------------------- | ---------------------------------------------------------- |
-| Unit/integration tests      | 73 passing; additional alias regression included afterward |
-| Statements                  | 84.32%                                                     |
-| Lines                       | 85.98%                                                     |
-| Functions                   | 84.90%                                                     |
-| Branches                    | 71.76%                                                     |
-| Production dependency audit | 0 known advisories at the time of inspection               |
+| Metric                      | Result                                         |
+| --------------------------- | ---------------------------------------------- |
+| Unit/integration tests      | 81 passing, including architecture regressions |
+| Statements                  | 84.39%                                         |
+| Lines                       | 86.01%                                         |
+| Functions                   | 85.31%                                         |
+| Branches                    | 71.93%                                         |
+| Production dependency audit | 0 known advisories at the time of inspection   |
 
 The generated report and latest CI run are authoritative. Test seeds are fixed so procedural
 variation does not randomly change assertions/coverage. Dependency advisories are time-sensitive;
@@ -64,10 +64,18 @@ browser renderer/menu/game code. Browser tests are not silently added to the uni
 | Legacy Python server finding             | Replaced by the declared Vite development environment                     |
 | Kill-feed/scoreboard DOM injection       | Text nodes, escaped templates and validated network score/counter fields  |
 
-The Sonar scan must verify the resulting classification; source changes alone are not evidence of
-a passed quality gate. HMAC-SHA1 in the coturn adapter is protocol compatibility, with a private
+The [Sonar rerun](https://github.com/meyer-pidiache/papershooter/actions/runs/43590008110) at `871d851`
+passed the unchanged gate: 80.6% new-code coverage, 0.2% duplication, no open bugs/vulnerabilities
+and no pending security hotspots. It still reports 148 code smells. Five asynchronous-failure
+findings from the initial scan were corrected and covered by regressions; they were not dismissed.
+HMAC-SHA1 in the coturn adapter is protocol compatibility, with a private
 signing secret and expiring credentials; it is not used to store passwords. Keep original upstream
 attribution and the scoped license notice intact.
+
+The subsequent [manual refactor review](reviews/2026-11-14-refactor.md) identifies remaining
+payload-validation, ownership, resource-lifetime and decomposition work that these green checks do
+not prove complete. `pnpm review:structure` publishes advisory size/complexity findings alongside
+coverage; see the [engineering standard](engineering-standard.md) for its policy and limits.
 
 ## Browser and deployment limits
 
@@ -75,12 +83,15 @@ The local ARM host is not an officially supported Playwright OS. Chromium softwa
 completed game start, Mexico selection, weapon switching and pause/resume, but repeated page reloads
 intermittently failed to create a WebGL context. The same failure was reproduced against archived
 `c74df47`; it is not evidence of a map regression. CI uses an Ubuntu runner for the full three-test
-Chromium suite. Record its actual outcome before marking the PR ready.
+Chromium suite. All three browser tests and all three container builds passed in the
+[PR CI run](https://github.com/meyer-pidiache/papershooter/actions/runs/43590008126).
 
 All Docker targets are built as review images. The Node review container was run with a read-only
 filesystem/dropped capabilities and returned 200 for the site, health and synthetic coturn
-credentials, `no-store` for credentials and 404 for `.env`. The existing deployment is not restarted
-by these checks. Vercel adapters/configuration are supplied but not deployed into an account here.
+credentials, `no-store` for credentials and 404 for `.env`. The static target also ran read-only with
+dropped capabilities as uid 101: site, health, ICE configuration and notices returned 200, while
+`.env` and the absent credential API returned 404. The existing deployment is not restarted by these
+checks. Vercel adapters/configuration are supplied but not deployed into an account here.
 
 Before releasing visual/network changes, also inspect both maps, graphics/audio, mouse/controller
 feel, restrictive NAT/TURN paths, reconnects and real provider billing/rate-limit behavior. Local

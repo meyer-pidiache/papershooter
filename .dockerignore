@@ -5,6 +5,7 @@
 .env
 .env.*
 node_modules
+reports
 .pnpm-store
 dist
 dist-server

@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "architecture": "node scripts/check-architecture.mjs",
+    "review:structure": "node scripts/review-structure.mjs",
     "licenses:generate": "node scripts/generate-notices.mjs",
     "licenses:check": "node scripts/generate-notices.mjs --check",
     "format": "prettier --write .",

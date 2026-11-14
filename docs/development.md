@@ -26,6 +26,7 @@ receive that prefix. See [networking](networking.md).
 | Command                                 | Purpose                                                                |
 | --------------------------------------- | ---------------------------------------------------------------------- |
 | `pnpm check`                            | Import boundaries, types, lint, unit/integration tests and both builds |
+| `pnpm review:structure`                 | Advisory size/complexity and static dependency report under `reports/` |
 | `pnpm format:check` / `pnpm format`     | Check/apply repository formatting                                      |
 | `pnpm test:watch`                       | Watch unit/integration tests                                           |
 | `pnpm test:coverage`                    | Include all product files and write HTML/LCOV under `coverage/`        |
