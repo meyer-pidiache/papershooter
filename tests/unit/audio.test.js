@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Vector3 } from 'three';
 import { Sfx } from '../../src/presentation/audio.js';
 import { AudioContextModel } from '../support/audio-context.js';
+import { assertAudioTrace } from '../support/audio-fingerprint.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -126,6 +127,7 @@ describe('procedural audio', () => {
         .filter((node) => node.started !== undefined)
         .every((node) => node.stopped >= node.started),
     ).toBe(true);
+    assertAudioTrace('effects', ctx);
     audio.dispose();
     expect(ctx.state).toBe('closed');
     expect(audio.ctx).toBeNull();
@@ -159,6 +161,7 @@ describe('procedural audio', () => {
     expect(
       ctx.parameters.every(({ value, time }) => Number.isFinite(value) && Number.isFinite(time)),
     ).toBe(true);
+    assertAudioTrace('music', ctx);
     audio.dispose();
     expect(vi.getTimerCount()).toBe(0);
   });
