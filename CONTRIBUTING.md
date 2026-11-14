@@ -1,104 +1,92 @@
 # Contributing
 
-Thanks for helping improve Paper Shooter.
+## Setup
 
-## Requirements
+Use Node 22.23.1 (`.nvmrc`), pnpm 12.18.0 (`packageManager`) and Git. Docker Compose is optional.
+Python and copied library distributions are no longer required.
 
-- Node.js 22 or newer and npm for the repository checks.
-- Python 3 for the lightweight local web server.
-- Docker Compose only when working on the container deployment or TURN service.
+```bash
+git clone https://github.com/meyer-pidiache/papershooter.git
+cd papershooter
+corepack enable
+pnpm install --frozen-lockfile
+git config core.hooksPath .githooks
+git config pull.rebase true
+pnpm check
+pnpm dev
+```
 
-## Local setup
+Open `http://127.0.0.1:5173`. See [development](docs/development.md) for commands, browser setup,
+container development and dependency/license updates. Read [architecture](docs/architecture.md)
+before moving responsibilities across modules and record technical changes in an ADR.
+Follow the [engineering standard](docs/engineering-standard.md) for module/function size,
+complexity, ownership and narrow contracts. Run `pnpm review:structure` when changing boundaries;
+its reports are advisory and still require architectural review and justified exceptions.
 
-    git clone https://github.com/meyer-pidiache/papershooter.git
-    cd papershooter
-    git config core.hooksPath .githooks
-    git config pull.rebase true
-    npm run check
-    python3 serve.py 8910
+Never commit `.env`, provider API tokens, signing secrets or permanent TURN credentials. Only public
+frontend configuration receives the `VITE_` prefix. The optional server reads private values at
+runtime. [Networking](docs/networking.md) explains signaling, direct connections and relay adapters.
 
-Open http://127.0.0.1:8910. Online play uses the public PeerJS signalling service. The Docker
-deployment can also request temporary Cloudflare TURN credentials when a network blocks direct
-WebRTC connections. See the README for its environment variables.
+## Trunk and rebase workflow
 
-Never commit .env files, API tokens, TURN credentials, or local deployment data. The repository
-ignores .env files except for the safe .env.example template.
+`main` is the deployable trunk. Use short-lived branches and focused Conventional Commits. Large
+migrations can use an explicitly agreed integration branch with independently reviewable commits;
+this architectural refactor uses that exception at the maintainer's request.
 
-## Trunk-based workflow
+```bash
+git switch main
+git pull --ff-only origin main
+git switch -c feat/short-description
+```
 
-The main branch is the trunk and should stay ready to deploy. Make a short-lived branch for one
-focused change, open a pull request early, and keep branches small enough to review and merge within
-a day or two.
+Before updating the pull request:
 
-Start from the current trunk:
+```bash
+git fetch origin
+git rebase origin/main
+pnpm check
+pnpm format:check
+```
 
-    git switch main
-    git pull --ff-only origin main
-    git switch -c feat/short-description
+If a published feature branch was rebased, update it with `git push --force-with-lease`. Never
+force-push `main`. Open a pull request against `main` and use GitHub's **Rebase and merge** to keep
+history linear. Preserve original authorship when porting upstream work; do not push to upstream.
 
-Before opening or updating a pull request, rebase the branch on the latest trunk:
+## Commits and hooks
 
-    git fetch origin
-    git rebase origin/main
+Use `feat`, `fix`, `docs`, `chore`, `ci`, `refactor`, `style`, `test`, `build`, `perf` or `revert`, with
+an optional scope and an imperative summary. Explain non-obvious decisions in the commit body.
 
-Resolve conflicts on the feature branch and rerun npm run check. If the branch was already pushed,
-update that branch with:
+```text
+refactor(maps): extract the shared construction kit
+fix(net): reject forged host-control messages
+test(player): preserve the recorded movement trace
+```
 
-    git push --force-with-lease
+The enabled hooks check staged whitespace and Conventional Commit subjects and run `pnpm check`
+before commits/pushes. CI retains the existing Conventional Commit PR-title check and runs type,
+import-boundary, lint, formatting, unit/integration, build, Chromium and container checks. The
+SonarCloud workflow generates LCOV before scanning; same-repository PRs require the configured
+`SONAR_TOKEN` repository secret. External fork PRs skip that secret-bearing analysis.
 
-Open a pull request against main. Keep the commit history linear and use GitHub's
-“Rebase and merge” option. Do not force-push main or merge unrelated work directly into it.
+Protect `main` with pull requests, linear history and required checks. Repository protection rules
+are GitHub settings; committing workflow files alone does not enable them. Do not bypass a failed
+quality gate as part of routine merging. Explain an exception against a concrete reviewed change.
 
-To compare with the source project, add its repository as a read-only reference and inspect changes
-before porting them:
+## Review expectations
 
-    git remote add upstream https://github.com/iifor/doodleshooter.git
-    git remote set-url --push upstream DISABLED
-    git fetch upstream
-    git log --oneline main..upstream/main
+Preserve existing game behavior unless the change explicitly documents a feature or bug fix.
+Keep gameplay balance and map redesign separate from structural refactors. Existing map fixtures
+record geometry/colliders/spawns for both maps and both modes. Movement snapshots record behavior;
+review the cause before changing an expected result. Never update fixtures just to hide a regression.
 
-Upstream commits can contain source changes and translations with separate authorship. Port only
-the needed changes, preserve attribution, and review the diff before rebasing or merging.
-
-## GitHub repository settings
-
-Protect main with pull requests and require the CI / check and CI / pull-request-title status
-checks. Require linear history, allow rebase merges, and block force pushes to main. These settings
-are stored in GitHub and cannot be enabled by files in this repository.
-
-## Git hooks and checks
-
-Enable the checked-in hooks once per clone:
-
-    git config core.hooksPath .githooks
-
-The hooks enforce Conventional Commit messages and run npm run check before commits and pushes.
-CI validates pull request titles, JavaScript module syntax, and Docker Compose configuration.
-SonarCloud analyzes pushes to `main` and pull requests from branches in this repository; configure
-a GitHub Actions repository secret named `SONAR_TOKEN` with a SonarCloud token. Pull requests from
-external forks skip SonarCloud analysis because GitHub does not expose repository secrets to them.
-The project does not yet have an automated gameplay test suite, so visual changes also need browser
-review.
-
-## Commits
-
-Use Conventional Commits and keep each commit focused:
-
-    feat(map): add a destructible plaza
-    fix(net): recover from a signalling interruption
-    docs: explain local Docker setup
-
-Use feat, fix, docs, chore, ci, refactor, style, test, build, perf, revert, or a scoped variant.
-Write the summary in the imperative mood and explain the reason in the body when it is not obvious.
-
-## Pull requests
-
-Describe what changed, why it changed, and how to review it. Include screenshots or a recording for
-visual work. Update the README when controls, deployment, game modes, or environment variables
-change. The pull request template provides a checklist.
+Use meaningful assertions and test failures, expiry, authority and cleanup as well as happy paths.
+Coverage includes all product files. Read [quality](docs/quality.md) for coverage scope and the manual
+browser/network checks that remain necessary. Include screenshots/recordings for visual work and
+update controls, environment/deployment docs and ADRs when their contracts change.
 
 ## License and attribution
 
-This fork is based on iifor/doodleshooter. Review NOTICE.md and LICENSE.md before reusing or
-redistributing code; the license file is scoped to original contributions in this fork and does
-not grant rights to inherited upstream code or vendored dependencies.
+Review [NOTICE.md](NOTICE.md) and [LICENSE.md](LICENSE.md). The fork's PolyForm Noncommercial terms
+cover original contributions in this fork and do not grant rights to inherited upstream material
+or third-party dependencies. Preserve upstream authorship and dependency notices.

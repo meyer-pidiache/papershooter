@@ -1,0 +1,141 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`preserves the movement trace for walking, sprint, jump, double jump, dash and crouch 1`] = `
+[
+  {
+    "ground": true,
+    "jumps": 1,
+    "pos": [
+      0,
+      0,
+      -3.105971,
+    ],
+    "sliding": false,
+    "vel": [
+      0,
+      0,
+      -6.6,
+    ],
+  },
+  {
+    "ground": true,
+    "jumps": 1,
+    "pos": [
+      0,
+      0,
+      -8.338817,
+    ],
+    "sliding": false,
+    "vel": [
+      0,
+      0,
+      -10.6,
+    ],
+  },
+  {
+    "ground": false,
+    "jumps": 1,
+    "pos": [
+      0,
+      0.691667,
+      -9.104372,
+    ],
+    "sliding": false,
+    "vel": [
+      0,
+      7.433333,
+      -9.186667,
+    ],
+  },
+  {
+    "ground": false,
+    "jumps": 1,
+    "pos": [
+      0,
+      0.808333,
+      -9.257483,
+    ],
+    "sliding": false,
+    "vel": [
+      0,
+      7,
+      -9.186667,
+    ],
+  },
+  {
+    "ground": false,
+    "jumps": 0,
+    "pos": [
+      0.625,
+      1.436,
+      -10.023039,
+    ],
+    "sliding": false,
+    "vel": [
+      7.5,
+      6.665333,
+      -9.186667,
+    ],
+  },
+  {
+    "ground": false,
+    "jumps": 0,
+    "pos": [
+      1.791667,
+      1.883111,
+      -10.788595,
+    ],
+    "sliding": false,
+    "vel": [
+      14,
+      4.498667,
+      -9.186667,
+    ],
+  },
+  {
+    "ground": true,
+    "jumps": 1,
+    "pos": [
+      13.815356,
+      0,
+      -18.678425,
+    ],
+    "sliding": false,
+    "vel": [
+      5.378014,
+      0,
+      -3.529002,
+    ],
+  },
+  {
+    "ground": true,
+    "jumps": 1,
+    "pos": [
+      14.390014,
+      0,
+      -23.778782,
+    ],
+    "sliding": false,
+    "vel": [
+      0.073483,
+      0,
+      -10.6,
+    ],
+  },
+  {
+    "ground": true,
+    "jumps": 1,
+    "pos": [
+      14.412086,
+      0,
+      -27.285736,
+    ],
+    "sliding": true,
+    "vel": [
+      0.059896,
+      0,
+      -10.441712,
+    ],
+  },
+]
+`;

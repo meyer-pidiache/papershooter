@@ -1,0 +1,7 @@
+minimumReleaseAgeExclude:
+  - '@playwright/test@1.65.1'
+  - playwright-core@1.65.1
+  - playwright@1.65.1
+  - '@eslint/config-array@0.23.6'
+  - eslint@10.15.0
+verifyDepsBeforeRun: false

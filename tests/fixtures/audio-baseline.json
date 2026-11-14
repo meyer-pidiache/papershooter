@@ -1,0 +1,12 @@
+{
+  "effects": {
+    "nodes": 528,
+    "parameters": 667,
+    "digest": "e8fe3aef49601410170ca9c57b2d77ee82ab75320b3f0edc29241d9ee0f0bd44"
+  },
+  "music": {
+    "nodes": 13843,
+    "parameters": 22111,
+    "digest": "f1c8009ec40aef0203083645357562d1a56db4a02d0b0130e2a455d48f803ed7"
+  }
+}

@@ -1,6 +1,14 @@
 .DS_Store
 node_modules/
 *.log
+dist/
+dist-server/
+coverage/
+playwright-report/
+test-results/
+reports/
+.scannerwork/
+.pnpm-store/
 .env
 .env.*
 !.env.example

@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "doodle-game",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["serve.py", "8910"],
+      "name": "paper-game",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev", "--port", "8910"],
       "port": 8910,
       "url": "http://127.0.0.1:8910"
     }
