@@ -237,7 +237,7 @@ export function createMultiplayer(runtime, actions = {}) {
       hud.kill(name + ' joined', 0);
     }
   };
-  net.on('lobby', (d) => {
+  net.onHost('lobby', (d) => {
     lobby.hostId = d.hostId;
     lobby.isPublic = !!d.isPublic;
     lobby.code = net.code;
@@ -255,13 +255,13 @@ export function createMultiplayer(runtime, actions = {}) {
     }
     renderLobby();
   });
-  net.on('leave', (d) => {
+  net.onHost('leave', (d) => {
     const nm = (lobby.players.get(d.id) || {}).name;
     removeRemote(d.id);
     if (inMatch()) hud.kill((nm || 'someone') + ' left', 0);
     renderLobby();
   });
-  net.on('start', (d) => {
+  net.onHost('start', (d) => {
     if (net.isHost) return;
     if (d.map) lobby.map = knownMap(d.map);
     startMatch(!!d.late, d.spawns ? d.spawns[net.id] : d.spawn);
@@ -274,14 +274,14 @@ export function createMultiplayer(runtime, actions = {}) {
   net.on('startreq', () => {
     if (net.isHost && game.state === 'lobby') hostStart();
   });
-  net.on('end', (d) => endMatch(d));
-  net.on('backtolobby', () => {
+  net.onHost('end', (d) => endMatch(d));
+  net.onHost('backtolobby', () => {
     if (!net.isHost) toLobbyScreen();
   });
-  net.on('pickup', (d) => {
+  net.onHost('pickup', (d) => {
     if (!net.isHost) spawnPickup(d.kind, new THREE.Vector3().fromArray(d.pos), d.id);
   });
-  net.on('taken', (d) => {
+  net.onHost('taken', (d) => {
     const p = runtime.state.pickups.find((x) => x.id === d.id);
     if (p) removePickup(p);
   });
@@ -300,9 +300,9 @@ export function createMultiplayer(runtime, actions = {}) {
       r.lastSeen = performance.now();
     }
   });
-  net.on('pdmg', (d) => {
+  net.on('pdmg', (d, from) => {
     if (!player.alive || game.state !== 'play' || player.shieldT > 0) return;
-    player.lastHitBy = d.by || null;
+    player.lastHitBy = from || null;
     player.lastHit = { from: d.from || null, crit: !!d.crit, amount: d.amount, src: d.src };
     player.takeDamage(d.amount, d.from ? new THREE.Vector3().fromArray(d.from) : null);
   });
@@ -361,7 +361,7 @@ export function createMultiplayer(runtime, actions = {}) {
       input.rumble(0.5, 0.3, 80);
     }
   });
-  net.on('score', (rows) => {
+  net.onHost('score', (rows) => {
     if (!net.isHost) applyScores(rows);
   });
   net.on('fell', (d, from) => {
@@ -374,7 +374,7 @@ export function createMultiplayer(runtime, actions = {}) {
       hud.kill(sc.name + ' fell off the page · -1', 0);
     }
   });
-  net.on('feed', (d) => hud.kill(String(d.text || ''), 0));
+  net.onHost('feed', (d) => hud.kill(String(d.text || ''), 0));
   player.onFall = () => {
     if (!online() || !inMatch()) return;
     hud.kill('fell off the page · -1 kill', 0);
@@ -387,7 +387,7 @@ export function createMultiplayer(runtime, actions = {}) {
       }
     } else net.send('fell', {});
   };
-  net.on('clock', (d) => {
+  net.onHost('clock', (d) => {
     if (!net.isHost) {
       runtime.state.matchLeft = d.left;
       runtime.state.clockRunning = !!d.on;
@@ -446,7 +446,7 @@ export function createMultiplayer(runtime, actions = {}) {
           }, 500);
         }
   }
-  net.on('kick', (d) => {
+  net.onHost('kick', (d) => {
     const back = String(net.aliasCode || net.code || '').replace(/-\d+$/, '');
     leaveOnline((d && d.reason) || 'kicked');
     lobby.rejoinCode = back;

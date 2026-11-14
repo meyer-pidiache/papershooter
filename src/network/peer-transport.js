@@ -1,6 +1,7 @@
 import { Peer } from 'peerjs';
 import { networkConfig } from './config.js';
 import { createIceClient } from './ice-client.js';
+import { isWireMessage } from './protocol.js';
 
 // Peer-to-peer networking over WebRTC, using the public PeerJS signalling service.
 // The host player's browser is authoritative. A small same-origin endpoint obtains temporary
@@ -64,6 +65,11 @@ export class Net {
   on(type, fn) {
     this.handlers.set(type, fn);
   }
+  onHost(type, fn) {
+    this.on(type, (data, from) => {
+      if (!this.isHost && from === this.hostId) fn(data, from);
+    });
+  }
   _emit(type, data, from) {
     const h = this.handlers.get(type);
     if (h) h(data, from);
@@ -99,14 +105,14 @@ export class Net {
   _wire(conn) {
     conn.on('data', (msg) => {
       this.stats.recv++;
-      if (!msg || typeof msg !== 'object') return;
+      if (!isWireMessage(msg)) return;
       this._route(msg, conn.peer);
     });
-    conn.on('close', () => this._drop(conn.peer));
-    conn.on('error', () => this._drop(conn.peer));
+    conn.on('close', () => this._drop(conn.peer, conn));
+    conn.on('error', () => this._drop(conn.peer, conn));
   }
-  _drop(pid) {
-    if (this.leaving || !this.conns.has(pid)) return;
+  _drop(pid, connection) {
+    if (this.leaving || !this.conns.has(pid) || this.conns.get(pid) !== connection) return;
     this.conns.delete(pid);
     if (this.isHost) {
       if (this.onPeerLeave) this.onPeerLeave(pid);
@@ -117,17 +123,19 @@ export class Net {
     }
   }
   _route(msg, from) {
+    if (!isWireMessage(msg)) return;
+    const sender = this.isHost ? from : msg.from || from;
     // clients can address each other; the host forwards those
     if (this.isHost && msg.to && msg.to !== this.id) {
       const c = this.conns.get(msg.to);
-      if (c && c.open) c.send(msg);
+      if (c && c.open) c.send({ ...msg, from: sender });
       return;
     }
     if (this.isHost && msg.relay) {
       for (const [pid, c] of this.conns)
         if (pid !== from && c.open) c.send({ t: msg.t, d: msg.d, from });
     }
-    this._emit(msg.t, msg.d, msg.from || from);
+    this._emit(msg.t, msg.d, sender);
   }
   _keepAlive(peer) {
     peer.on('disconnected', () => {
