@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BoxGeometry, Mesh, MeshBasicMaterial, Scene, Vector3 } from 'three';
 import { Effects } from '../../src/presentation/effects.js';
 import { SceneResources } from '../../src/engine/resources.js';
@@ -37,6 +37,8 @@ describe('effect simulation baseline', () => {
     const world = new World();
     world.addBox(new Vector3(-25, -1, -25), new Vector3(25, 0, 25));
     world.addBox(new Vector3(1.5, 0, -5), new Vector3(2.5, 4, 5));
+    world.finalize();
+    const rays = vi.spyOn(world, 'raycast');
     const effects = new Effects(scene, world, resources);
     const pos = new Vector3(0, 1, 0),
       dir = new Vector3(0.5, 1, 0.2).normalize(),
@@ -72,6 +74,7 @@ describe('effect simulation baseline', () => {
       saved.composed = actual;
       writeFileSync(path, JSON.stringify(saved, null, 2) + '\n');
     } else expect(actual).toBe(baseline.composed);
+    expect(rays.mock.results.some((result) => result.value !== null)).toBe(true);
     expect(effects.particles).toHaveLength(0);
     expect(effects.debrisList).toHaveLength(0);
     effects.dispose();
