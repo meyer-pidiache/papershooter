@@ -340,32 +340,48 @@ export class Player {
   }
 
   update(dt) {
-    const ctx = this.ctx,
-      inp = ctx.input,
-      b = this.body;
     this.lastDamageT += dt;
     if (!this.alive) {
-      this.deathT += dt;
-      this.eyeH = damp(this.eyeH, 0.35, 3, dt);
-      this.roll = damp(this.roll, 0.9, 3, dt);
-      this.pitch = damp(this.pitch, -0.35, 3, dt);
-      b.vel.x = damp(b.vel.x, 0, 4, dt);
-      b.vel.z = damp(b.vel.z, 0, 4, dt);
-      b.vel.y -= G * dt;
-      ctx.world.moveBody(b, dt);
-      this.forward.set(
-        -Math.sin(this.yaw) * Math.cos(this.pitch),
-        Math.sin(this.pitch),
-        -Math.cos(this.yaw) * Math.cos(this.pitch),
-      );
-      this.right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-      this.updateNades(dt);
-      this._updateCamera(dt);
-      this.weapon.animate(dt, this._weaponState(false, false, 0));
+      this._updateDead(dt);
       return;
     }
     this.rig.visible = true;
-    // ---- look ----
+    if (this._updateLook(dt)) return;
+    const motion = this._readMovement(dt);
+    this._accelerate(dt, motion);
+    this._updateJump(dt, motion);
+    this._integrateMovement(dt, motion);
+    const speed = this._recoverMovement(dt, motion.sprinting);
+    this._updateGrenadeInput(dt);
+    this._updateWeaponInput(dt, motion.sprinting, motion.aiming, speed);
+  }
+
+  _updateDead(dt) {
+    const ctx = this.ctx, b = this.body;
+
+    this.deathT += dt;
+    this.eyeH = damp(this.eyeH, 0.35, 3, dt);
+    this.roll = damp(this.roll, 0.9, 3, dt);
+    this.pitch = damp(this.pitch, -0.35, 3, dt);
+    b.vel.x = damp(b.vel.x, 0, 4, dt);
+    b.vel.z = damp(b.vel.z, 0, 4, dt);
+    b.vel.y -= G * dt;
+    ctx.world.moveBody(b, dt);
+    this.forward.set(
+      -Math.sin(this.yaw) * Math.cos(this.pitch),
+      Math.sin(this.pitch),
+      -Math.cos(this.yaw) * Math.cos(this.pitch),
+    );
+    this.right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+    this.updateNades(dt);
+    this._updateCamera(dt);
+    this.weapon.animate(dt, this._weaponState(false, false, 0));
+    return;
+  }
+
+  _updateLook(dt) {
+    const inp = this.ctx.input, b = this.body;
+
     const lookMul = this._aiming ? (this.weapon.scope ? 0.38 : 0.62) : 1;
     this.yaw += inp.look.x * lookMul;
     this.pitch = clamp(this.pitch + inp.look.y * lookMul, -1.5, 1.5);
@@ -384,9 +400,17 @@ export class Player {
       this.coyote = 0.13;
       this._updateCamera(dt);
       this.weapon.animate(dt, this._weaponState(false, false, 0));
-      return;
+      return true;
     }
-    // ---- movement input ----
+
+    return false;
+  }
+
+  _readMovement(dt) {
+    const ctx = this.ctx,
+      inp = ctx.input,
+      b = this.body;
+
     const mv = inp.move;
     this._mv = mv;
     const wish = _v.set(0, 0, 0).addScaledVector(_fwd, mv.y).addScaledVector(_right, mv.x);
@@ -419,7 +443,22 @@ export class Player {
     this.landGraceT -= dt;
     this.dashCd -= dt;
     this.blockCd -= dt;
-    // ---- ground / air accel ----
+
+    const motion = (this._motion ??= {});
+    motion.mv = mv;
+    motion.wish = wish;
+    motion.wishLen = wishLen;
+    motion.aiming = aiming;
+    motion.hspeed = hspeed;
+    motion.sprinting = sprinting;
+    motion.maxSpeed = maxSpeed;
+    return motion;
+  }
+
+  _accelerate(dt, motion) {
+    const b = this.body;
+    const { hspeed, wish, wishLen, maxSpeed } = motion;
+
     if (b.onGround) {
       this.coyote = 0.13;
       this.airT = 0;
@@ -469,7 +508,12 @@ export class Player {
         }
       }
     }
-    // ---- jumping / wall jump / air dash ----
+  }
+
+  _updateJump(dt, motion) {
+    const inp = this.ctx.input, b = this.body;
+    const { wish, wishLen } = motion;
+
     if (inp.pressed('jump')) this.jumpBuffer = 0.15;
     else this.jumpBuffer -= dt;
     this.wallJumpCd -= dt;
@@ -537,7 +581,12 @@ export class Player {
       this.grapple.state !== 'on'
     )
       this._dash(wishLen > 0 ? wish : _fwd);
-    // ---- gravity, grapple, mantle, integrate ----
+  }
+
+  _integrateMovement(dt, motion) {
+    const ctx = this.ctx, b = this.body;
+    const { mv } = motion;
+
     b.vel.y -= G * this.gravityScale * (this.grapple.state === 'on' ? 0.88 : 1) * dt;
     this._updateGrapple(dt);
     if (
@@ -571,7 +620,11 @@ export class Player {
       if (Math.hypot(b.vel.x, b.vel.z) > 9) this.landGraceT = 0.4;
     }
     this.lastGround = b.onGround;
-    // ---- regen, bob, footsteps ----
+  }
+
+  _recoverMovement(dt, sprinting) {
+    const ctx = this.ctx, b = this.body;
+
     if (
       this.lastDamageT > this.regenDelay &&
       this.hp < this.maxHp &&
@@ -601,7 +654,13 @@ export class Player {
       }
     }
     this._updateCamera(dt);
-    // ---- grenades ----
+
+    return hs2;
+  }
+
+  _updateGrenadeInput(dt) {
+    const inp = this.ctx.input;
+
     this.nadeCd -= dt;
     if (
       inp.down('grenade') &&
@@ -620,7 +679,11 @@ export class Player {
     }
     this.updateNadeArc(this._nadeHeld ? this.nadeCharge : -1);
     this.updateNades(dt);
-    // ---- weapons ----
+  }
+
+  _updateWeaponInput(dt, sprinting, aiming, hs2) {
+    const ctx = this.ctx, inp = ctx.input;
+
     for (let i = 0; i < 5; i++)
       if (inp.pressed('slot' + (i + 1))) this.switchTo(Math.min(i, this.weapons.length - 1));
     if (inp.pressed('nextWeapon')) this.switchTo((this.weaponIndex + 1) % this.weapons.length);
