@@ -225,4 +225,37 @@ describe('composed application without the GPU transport', () => {
     expect(renderer.dispose).toHaveBeenCalledOnce();
     expect(window.__game).toBeUndefined();
   });
+
+  it('recovers the menu if an unexpected error interrupts host migration', async () => {
+    fixture = applicationFixture();
+    const { app, net, lobby, state } = fixture;
+    net.id = 'successor';
+    lobby.hostId = 'departed';
+    lobby.code = 'ABCDE';
+    lobby.order = ['departed', 'successor'];
+    lobby.players.set('successor', { name: 'player' });
+    vi.spyOn(net, 'host').mockResolvedValue();
+    vi.spyOn(net, 'claimAlias').mockImplementation(() => {
+      throw new Error('alias setup failed');
+    });
+    vi.spyOn(net, 'listLobbies').mockResolvedValue([]);
+    await app.multiplayer.migrateHost();
+    expect(state.screen).toBe('online');
+    expect(lobby.status).toContain('could not recover the lobby');
+    expect(lobby.players.size).toBe(0);
+    expect(net.active).toBe(false);
+  });
+
+  it('shows a failed lobby lookup and allows a subsequent refresh', async () => {
+    fixture = applicationFixture();
+    const { app, net } = fixture;
+    vi.spyOn(net, 'listLobbies')
+      .mockRejectedValueOnce(new Error('signalling timed out'))
+      .mockResolvedValue([]);
+    document.querySelector('#onlineBtn').click();
+    await Promise.resolve();
+    expect(document.querySelector('#lobbyRows').textContent).toContain('could not look');
+    await app.screens.refreshLobbies();
+    expect(document.querySelector('#lobbyRows').textContent).toContain('QUICK PLAY');
+  });
 });

@@ -214,8 +214,8 @@ export function createScreens(runtime, actions = {}) {
         showStart();
       });
     if (q('refreshBtn')) {
-      q('refreshBtn').addEventListener('click', () => refreshLobbies());
-      if (!lobbyList && !listBusy) refreshLobbies();
+      q('refreshBtn').addEventListener('click', () => void refreshLobbies());
+      if (!lobbyList && !listBusy) void refreshLobbies();
     }
     if (q('lobbyRows'))
       q('lobbyRows').addEventListener('click', (e) => {

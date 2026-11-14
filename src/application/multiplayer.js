@@ -99,7 +99,7 @@ export function createMultiplayer(runtime, actions = {}) {
     }
   };
   net.onDisconnect = () => {
-    if (lobby.order && lobby.order.some((id) => id !== lobby.hostId)) migrateHost();
+    if (lobby.order && lobby.order.some((id) => id !== lobby.hostId)) void migrateHost();
     else leaveOnline('the host left the lobby');
   };
   // ---- host transfer: when the host goes, the earliest-joined player left takes over on a generation
@@ -111,6 +111,8 @@ export function createMultiplayer(runtime, actions = {}) {
     migrating = true;
     try {
       await _migrateHost();
+    } catch {
+      leaveOnline('could not recover the lobby after the host left');
     } finally {
       migrating = false;
     }
@@ -465,7 +467,7 @@ export function createMultiplayer(runtime, actions = {}) {
         if (r.lastSeen && performance.now() - r.lastSeen > 9000) {
           if (!net.isHost && id === net.hostId) {
             net.leave();
-            migrateHost();
+            void migrateHost();
             break;
           }
           const nm = r.name;

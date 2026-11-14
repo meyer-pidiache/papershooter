@@ -98,4 +98,16 @@ describe('browser input adapter', () => {
     input.update(1 / 60);
     input.rumble();
   });
+
+  it('tolerates a rejected haptic effect after a controller disconnects', async () => {
+    input = new Input(document.createElement('canvas'));
+    const playEffect = vi.fn().mockRejectedValue(new Error('controller disconnected'));
+    input._pad = { vibrationActuator: { playEffect } };
+    input.rumble();
+    await Promise.resolve();
+    expect(playEffect).toHaveBeenCalledOnce();
+    input._pad = null;
+    input.rumble();
+    expect(playEffect).toHaveBeenCalledOnce();
+  });
 });

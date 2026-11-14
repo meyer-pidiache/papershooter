@@ -312,10 +312,13 @@ export class Input {
     const act = pad.vibrationActuator || (pad.hapticActuators && pad.hapticActuators[0]);
     if (!act || !act.playEffect) return;
     try {
-      act.playEffect('dual-rumble', {
+      const effect = act.playEffect('dual-rumble', {
         duration: ms,
         strongMagnitude: clamp(strong, 0, 1),
         weakMagnitude: clamp(weak, 0, 1),
+      });
+      effect?.catch(() => {
+        // Haptics may be rejected when the controller disconnects or the tab loses focus.
       });
     } catch (e) {
       /* ignore */

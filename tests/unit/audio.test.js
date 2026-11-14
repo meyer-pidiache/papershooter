@@ -10,6 +10,22 @@ afterEach(() => {
 });
 
 describe('procedural audio', () => {
+  it('retries a suspended context after the browser rejects an autoplay resume', async () => {
+    vi.stubGlobal('AudioContext', AudioContextModel);
+    const audio = new Sfx();
+    audio.init();
+    const resume = vi
+      .spyOn(audio.ctx, 'resume')
+      .mockRejectedValueOnce(new Error('user gesture required'));
+    audio.resume();
+    await Promise.resolve();
+    expect(audio.ctx.state).toBe('suspended');
+    audio.resume();
+    expect(resume).toHaveBeenCalledTimes(2);
+    expect(audio.ctx.state).toBe('running');
+    audio.dispose();
+  });
+
   it('schedules finite sound envelopes, attenuates distance and owns its context', () => {
     vi.stubGlobal('AudioContext', AudioContextModel);
     const audio = new Sfx();

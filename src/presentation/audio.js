@@ -29,7 +29,10 @@ export class Sfx {
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   }
   resume() {
-    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.ctx && this.ctx.state === 'suspended')
+      void this.ctx.resume().catch(() => {
+        // Autoplay policy may still require another user gesture; keep the context for retry.
+      });
   }
   dispose() {
     this.musicOn(false);
