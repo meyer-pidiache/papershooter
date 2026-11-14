@@ -113,7 +113,6 @@ export class Cooldown {
 }
 
 // Quaternion helper: rotation that maps +Y to dir
-const _q = new THREE.Quaternion();
 const _up = new THREE.Vector3(0, 1, 0);
 export function quatFromYTo(dir: THREE.Vector3, out = new THREE.Quaternion()) {
   return out.setFromUnitVectors(_up, dir);

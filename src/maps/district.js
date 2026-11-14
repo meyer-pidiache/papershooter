@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeInkMaterial, INK } from '../presentation/renderer.js';
+import { INK } from '../presentation/renderer.js';
 
 export function buildDistrict(B, arena = false) {
   const {

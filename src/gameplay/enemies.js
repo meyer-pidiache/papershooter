@@ -9,7 +9,6 @@ import {
   damp,
   wrapAngle,
   angleLerp,
-  choose,
   alignYAxis,
   TAU,
 } from '../engine/math.js';
@@ -17,10 +16,7 @@ import {
 const _v = new THREE.Vector3(),
   _v2 = new THREE.Vector3(),
   _v3 = new THREE.Vector3(),
-  _d = new THREE.Vector3(),
-  _q = new THREE.Quaternion(),
-  _m = new THREE.Matrix4(),
-  _s = new THREE.Vector3();
+  _d = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0),
   _eye = new THREE.Vector3(),
   _goal = new THREE.Vector3();
@@ -28,12 +24,7 @@ const nxOf = (dx, d) => dx / (d || 1),
   nzOf = (dz, d) => dz / (d || 1);
 
 import { TYPES, STATE_CODES, STATE_NAMES } from '../domain/enemies.js';
-import {
-  buildHumanoid,
-  buildBomber,
-  buildFlyer,
-  buildWeaponProp,
-} from '../presentation/models/characters.js';
+import { buildHumanoid, buildBomber, buildFlyer } from '../presentation/models/characters.js';
 import { Projectiles } from './projectiles.js';
 export { BOSSES } from '../domain/waves.js';
 export { TYPES, STATE_CODES, STATE_NAMES } from '../domain/enemies.js';

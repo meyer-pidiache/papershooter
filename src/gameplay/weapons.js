@@ -2,11 +2,10 @@
 import * as THREE from 'three';
 import { makeInkMaterial, INK } from '../presentation/renderer.js';
 import { SEE_THROUGH } from '../engine/physics.js';
-import { rand, clamp, damp, lerp, Spring3, TAU } from '../engine/math.js';
+import { rand, clamp, damp, lerp, TAU } from '../engine/math.js';
 
 const _v = new THREE.Vector3(),
-  _v2 = new THREE.Vector3(),
-  _v3 = new THREE.Vector3();
+  _v2 = new THREE.Vector3();
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 function bx(w, h, d, x, y, z, mat, parent) {
@@ -459,7 +458,7 @@ export class Revolver extends Gun {
     this.cylGroup = new THREE.Group();
     this.cylGroup.position.set(0, 0.0, -0.02);
     g.add(this.cylGroup);
-    const c = cyl(0.05, 0.11, 0, 0, 0, mat, this.cylGroup, 'z', 6);
+    cyl(0.05, 0.11, 0, 0, 0, mat, this.cylGroup, 'z', 6);
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * TAU;
       cyl(0.012, 0.115, Math.cos(a) * 0.032, Math.sin(a) * 0.032, 0, dark, this.cylGroup, 'z', 5);
@@ -506,7 +505,7 @@ export class Sniper extends Gun {
     cyl(0.066, 0.07, 0, 0.135, -0.36, mat, g);
     cyl(0.062, 0.07, 0, 0.135, 0.14, mat, g);
     for (const z of [-0.24, 0.02]) {
-      const r = bx(0.03, 0.09, 0.035, 0, 0.085, z, dark, g);
+      bx(0.03, 0.09, 0.035, 0, 0.085, z, dark, g);
     }
     const cross = new THREE.Group();
     cross.position.set(0, 0.135, -0.38);

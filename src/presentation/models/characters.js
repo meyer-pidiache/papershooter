@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { makeInkMaterial, INK } from '../renderer.js';
-import { rand, choose, TAU } from '../../engine/math.js';
+import { rand, TAU } from '../../engine/math.js';
 
 // ---------------- doodle model kit ----------------
 // Everything below is drawn as pen strokes: limbs are slightly bowed tubes, bodies are
@@ -222,7 +222,7 @@ export function buildHumanoid(mat, solid, T) {
   const headG = new THREE.Group();
   headG.position.y = 0.62;
   torso.add(headG);
-  const head = blob(0.275 * headS * jit, 0.3 * headS, 0.25 * headS, 0, 0.26, 0, mat, headG);
+  blob(0.275 * headS * jit, 0.3 * headS, 0.25 * headS, 0, 0.26, 0, mat, headG);
   parts.head = new THREE.Object3D();
   parts.head.position.y = 0.26;
   headG.add(parts.head);
@@ -273,7 +273,7 @@ export function buildHumanoid(mat, solid, T) {
     shieldG = new THREE.Group();
     shieldG.position.set(-0.17, 0.34, 0.46);
     torso.add(shieldG);
-    const plate = bx(0.92, 1.3, 0.07, 0, 0, 0, mat, shieldG);
+    bx(0.92, 1.3, 0.07, 0, 0, 0, mat, shieldG);
     bx(0.62, 0.06, 0.09, 0, 0.26, 0.04, solid, shieldG);
     bx(0.06, 0.62, 0.09, 0, 0.26, 0.04, solid, shieldG);
     parts.shield = new THREE.Object3D();
@@ -422,7 +422,7 @@ export function buildFlyer(mat, solid, T) {
   headG.scale.setScalar(0.72);
   body.add(headG);
   const fc = doodleFace(headG, solid, { ex: 0.11, ey: 0.02, ez: 0.16, er: 0.05 });
-  const tail = bx(0.04, 0.28, 0.3, 0, 0.14, -0.62, mat, body);
+  bx(0.04, 0.28, 0.3, 0, 0.14, -0.62, mat, body);
   Object.assign(J, { body, wl, wr, headG, torso: body, gun: new THREE.Group() });
   root.scale.setScalar(T.scale);
   return { root, parts, J, tip: headG, face: fc, hit: [['torso', 0.48]] };

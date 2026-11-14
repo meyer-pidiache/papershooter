@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { makeInkMaterial, INK } from '../presentation/renderer.js';
-import { rand, choose, TAU } from '../engine/math.js';
+import { rand, TAU } from '../engine/math.js';
 import { buildHumanoid } from '../presentation/models/characters.js';
 
 export function buildMexico(B, arena = false) {

@@ -1,6 +1,6 @@
 // Procedural WebAudio sound effects (no external assets).
 import * as THREE from 'three';
-import { clamp, rand, choose } from '../engine/math.js';
+import { clamp, rand } from '../engine/math.js';
 
 export class Sfx {
   constructor() {

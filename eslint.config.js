@@ -20,17 +20,12 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     rules: {
       'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { args: 'none', varsIgnorePattern: '^_', caughtErrors: 'none' },
-      ],
+      '@typescript-eslint/no-unused-vars': ['error', { args: 'none', caughtErrors: 'none' }],
     },
   },
   {
     files: ['src/**/*.js'],
     rules: {
-      // Existing procedural engine modules are JavaScript; strict TS applies to new boundaries.
-      '@typescript-eslint/no-unused-vars': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
     },
   },

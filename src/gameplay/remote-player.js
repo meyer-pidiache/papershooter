@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { makeInkMaterial, setFill, INK } from '../presentation/renderer.js';
 import { buildHumanoid, buildWeaponProp } from '../presentation/models/characters.js';
-import { clamp, damp, angleLerp, wrapAngle } from '../engine/math.js';
+import { clamp, damp, angleLerp } from '../engine/math.js';
 
 const _v = new THREE.Vector3(),
   _v2 = new THREE.Vector3(),

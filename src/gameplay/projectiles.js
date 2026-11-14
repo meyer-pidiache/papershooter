@@ -1,18 +1,8 @@
-// Enemies: doodle humanoids (asdf-style stick figures with faces), flyers, bombers, shield bearers and a boss.
+// Enemy projectile simulation, hit detection and instanced rendering.
 import * as THREE from 'three';
-import { makeInkMaterial, setFill, INK } from '../presentation/renderer.js';
-import { makeBody, SEE_THROUGH } from '../engine/physics.js';
-import {
-  rand,
-  randInt,
-  clamp,
-  damp,
-  wrapAngle,
-  angleLerp,
-  choose,
-  alignYAxis,
-  TAU,
-} from '../engine/math.js';
+import { makeInkMaterial, INK } from '../presentation/renderer.js';
+import { SEE_THROUGH } from '../engine/physics.js';
+import { clamp } from '../engine/math.js';
 
 const _v = new THREE.Vector3(),
   _v2 = new THREE.Vector3(),
@@ -21,11 +11,7 @@ const _v = new THREE.Vector3(),
   _q = new THREE.Quaternion(),
   _m = new THREE.Matrix4(),
   _s = new THREE.Vector3();
-const _up = new THREE.Vector3(0, 1, 0),
-  _eye = new THREE.Vector3(),
-  _goal = new THREE.Vector3();
-const nxOf = (dx, d) => dx / (d || 1),
-  nzOf = (dz, d) => dz / (d || 1);
+const _up = new THREE.Vector3(0, 1, 0);
 
 export class Projectiles {
   constructor(mgr) {
