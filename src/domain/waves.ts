@@ -1,5 +1,6 @@
 export const BOSSES = ['boss', 'eraser', 'inkblot'] as const;
-export type EnemyKind = 'grunt' | 'rusher' | 'bomber' | 'sniper' | 'flyer' | 'heavy' | 'shield' | (typeof BOSSES)[number];
+export type EnemyKind =
+  'grunt' | 'rusher' | 'bomber' | 'sniper' | 'flyer' | 'heavy' | 'shield' | (typeof BOSSES)[number];
 
 const ROSTER: ReadonlyArray<{ type: EnemyKind; from: number; weight: number }> = [
   { type: 'grunt', from: 1, weight: 10 },
@@ -23,20 +24,28 @@ export function bossFor(wave: number) {
 }
 
 export function enemyName(type: string): string {
-  const names: Record<string, string> = { boss: 'THE DOODLER', eraser: 'THE ERASER', inkblot: 'THE INKBLOT' };
+  const names: Record<string, string> = {
+    boss: 'THE DOODLER',
+    eraser: 'THE ERASER',
+    inkblot: 'THE INKBLOT',
+  };
   return names[type] ?? type.toUpperCase();
 }
 
 /** The same roster, random draw order and balance as the original game. */
 export function planWave(wave: number, random: () => number = Math.random) {
-  if (!Number.isSafeInteger(wave) || wave < 1) throw new RangeError('Wave must be a positive integer');
+  if (!Number.isSafeInteger(wave) || wave < 1)
+    throw new RangeError('Wave must be a positive integer');
   const boss = wave % 5 === 0;
   let allowed: number = MODIFIERS.length;
   if (boss || wave < 4) allowed = 1;
   else if (wave < 6) allowed = 3;
   const modifier = MODIFIERS[Math.floor(random() * allowed)];
   const swarm = modifier === MODIFIERS[3];
-  let maxAlive = Math.min(4 + Math.floor(wave * 0.9) + (swarm ? 3 : 0), (swarm ? 22 : 18) + Math.floor(wave / 3));
+  let maxAlive = Math.min(
+    4 + Math.floor(wave * 0.9) + (swarm ? 3 : 0),
+    (swarm ? 22 : 18) + Math.floor(wave / 3),
+  );
   let count = Math.round(Math.min(5 + wave * 2, 32 + wave) * (swarm ? 1.35 : 1));
   const queue: EnemyKind[] = [];
   if (boss) {
@@ -45,7 +54,8 @@ export function planWave(wave: number, random: () => number = Math.random) {
     queue.push(bossFor(wave));
   }
   const pool = ROSTER.filter((entry) => wave >= entry.from).map((entry) => ({
-    ...entry, weight: entry.weight * Math.min(1, 0.3 + 0.25 * (wave - entry.from)),
+    ...entry,
+    weight: entry.weight * Math.min(1, 0.3 + 0.25 * (wave - entry.from)),
   }));
   const total = pool.reduce((sum, entry) => sum + entry.weight, 0);
   for (let i = 0; i < count; i++) {
@@ -53,9 +63,19 @@ export function planWave(wave: number, random: () => number = Math.random) {
     let type = pool[0].type;
     for (const entry of pool) {
       roll -= entry.weight;
-      if (roll <= 0) { type = entry.type; break; }
+      if (roll <= 0) {
+        type = entry.type;
+        break;
+      }
     }
     queue.push(type);
   }
-  return { boss, queue, maxAlive, modifier: modifier.name, speed: modifier.speed, damage: modifier.damage * 1.2 };
+  return {
+    boss,
+    queue,
+    maxAlive,
+    modifier: modifier.name,
+    speed: modifier.speed,
+    damage: modifier.damage * 1.2,
+  };
 }

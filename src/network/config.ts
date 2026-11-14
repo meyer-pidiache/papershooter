@@ -13,15 +13,19 @@ export function networkConfig(env: NetworkEnvironment, hostname: string) {
     peer.path = String(env.VITE_PEER_PATH || '/');
     peer.secure = env.VITE_PEER_SECURE !== 'false';
     const port = Number(env.VITE_PEER_PORT || (peer.secure ? 443 : 80));
-    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new TypeError('Invalid signaling port');
+    if (!Number.isInteger(port) || port < 1 || port > 65535)
+      throw new TypeError('Invalid signaling port');
     peer.port = port;
   }
   return {
     namespace,
     peer,
-    stunServers: env.VITE_STUN_SERVERS === undefined ? null : parseStunUrls(String(env.VITE_STUN_SERVERS)),
+    stunServers:
+      env.VITE_STUN_SERVERS === undefined ? null : parseStunUrls(String(env.VITE_STUN_SERVERS)),
     iceConfigUrl: credentialEndpoint(String(env.VITE_ICE_CONFIG_URL || '/ice-servers.json')),
-    turnCredentialsUrl: env.VITE_TURN_CREDENTIALS_URL ? credentialEndpoint(String(env.VITE_TURN_CREDENTIALS_URL)) : null,
+    turnCredentialsUrl: env.VITE_TURN_CREDENTIALS_URL
+      ? credentialEndpoint(String(env.VITE_TURN_CREDENTIALS_URL))
+      : null,
   };
 }
 

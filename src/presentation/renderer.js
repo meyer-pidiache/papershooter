@@ -2,19 +2,20 @@
 // full-screen "pen on lined paper" pass draws outlines, hatching, paper grain and ruled lines.
 import * as THREE from 'three';
 
-export const INK = { BLUE: 0, RED: 1, BLACK: 2, ORANGE: 3, GREEN: 4, PINK: 5 };
+import { INK } from '../shared/ink.js';
+export { INK } from '../shared/ink.js';
 export const INK_COLORS = [
-  new THREE.Vector3(0.10, 0.19, 0.76), // blue ballpoint
-  new THREE.Vector3(0.86, 0.12, 0.20), // red pen
-  new THREE.Vector3(0.18, 0.20, 0.26), // graphite
+  new THREE.Vector3(0.1, 0.19, 0.76), // blue ballpoint
+  new THREE.Vector3(0.86, 0.12, 0.2), // red pen
+  new THREE.Vector3(0.18, 0.2, 0.26), // graphite
   new THREE.Vector3(0.92, 0.55, 0.08), // orange highlighter
-  new THREE.Vector3(0.12, 0.60, 0.30), // green
-  new THREE.Vector3(0.90, 0.40, 0.66), // pink eraser
+  new THREE.Vector3(0.12, 0.6, 0.3), // green
+  new THREE.Vector3(0.9, 0.4, 0.66), // pink eraser
 ];
 export const LIGHT_WORLD = new THREE.Vector3(0.38, 0.82, 0.42).normalize();
 export const shared = { uLightDir: { value: new THREE.Vector3(0, 1, 0) }, uTime: { value: 0 } };
 
-const inkVert = /* glsl */`
+const inkVert = /* glsl */ `
 varying vec3 vNormalV;
 varying vec4 vColorData;
 uniform float uTime;
@@ -35,7 +36,7 @@ void main() {
   gl_Position = projectionMatrix * mvPosition;
 }`;
 
-const inkFrag = /* glsl */`
+const inkFrag = /* glsl */ `
 precision highp float;
 uniform float uInk;
 uniform float uFill;
@@ -58,23 +59,33 @@ void main() {
 export function makeInkMaterial(opts = {}) {
   const m = new THREE.ShaderMaterial({
     uniforms: {
-      uInk: { value: opts.ink ?? INK.BLUE }, uFill: { value: opts.fill ? 1 : 0 },
-      uShadeScale: { value: opts.shadeScale ?? 1.0 }, uShadeBias: { value: opts.shadeBias ?? 0.0 },
-      uLightDir: shared.uLightDir, uTime: shared.uTime,
+      uInk: { value: opts.ink ?? INK.BLUE },
+      uFill: { value: opts.fill ? 1 : 0 },
+      uShadeScale: { value: opts.shadeScale ?? 1.0 },
+      uShadeBias: { value: opts.shadeBias ?? 0.0 },
+      uLightDir: shared.uLightDir,
+      uTime: shared.uTime,
     },
-    vertexShader: inkVert, fragmentShader: inkFrag, side: opts.side ?? THREE.FrontSide,
+    vertexShader: inkVert,
+    fragmentShader: inkFrag,
+    side: opts.side ?? THREE.FrontSide,
   });
   m.inkId = opts.ink ?? INK.BLUE;
   return m;
 }
-export function setInk(mat, ink) { mat.uniforms.uInk.value = ink; mat.inkId = ink; }
-export function setFill(mat, fill) { mat.uniforms.uFill.value = fill ? 1 : 0; }
+export function setInk(mat, ink) {
+  mat.uniforms.uInk.value = ink;
+  mat.inkId = ink;
+}
+export function setFill(mat, fill) {
+  mat.uniforms.uFill.value = fill ? 1 : 0;
+}
 
-const postVert = /* glsl */`
+const postVert = /* glsl */ `
 varying vec2 vUv;
 void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
-const postFrag = /* glsl */`
+const postFrag = /* glsl */ `
 precision highp float;
 varying vec2 vUv;
 uniform sampler2D tScene;
@@ -222,49 +233,106 @@ void main() {
 
 export class InkRenderer {
   constructor(canvas) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: false,
+      powerPreference: 'high-performance',
+      stencil: false,
+    });
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     this.renderer.autoClear = false;
     this.pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(80, 1, 0.08, 420);
-    const depthTexture = new THREE.DepthTexture(2, 2); depthTexture.format = THREE.DepthFormat; depthTexture.type = THREE.FloatType;
-    this.rt = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthTexture, depthBuffer: true, stencilBuffer: false, generateMipmaps: false });
+    const depthTexture = new THREE.DepthTexture(2, 2);
+    depthTexture.format = THREE.DepthFormat;
+    depthTexture.type = THREE.FloatType;
+    this.rt = new THREE.WebGLRenderTarget(2, 2, {
+      type: THREE.HalfFloatType,
+      format: THREE.RGBAFormat,
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      depthTexture,
+      depthBuffer: true,
+      stencilBuffer: false,
+      generateMipmaps: false,
+    });
     this.post = new THREE.ShaderMaterial({
       uniforms: {
-        tScene: { value: this.rt.texture }, tDepth: { value: depthTexture }, uRes: { value: new THREE.Vector2(2, 2) }, uAspect: { value: 1 },
-        uTime: { value: 0 }, uNear: { value: this.camera.near }, uFar: { value: this.camera.far }, uHurt: { value: 0 }, uFlash: { value: 0 }, uSlow: { value: 0 },
-        uLowHp: { value: 0 }, uLineSpacing: { value: 60 }, uPaper: { value: new THREE.Vector3(0.965, 0.955, 0.905) }, uInks: { value: INK_COLORS },
-        uInvProj: { value: new THREE.Matrix4() }, uInvView: { value: new THREE.Matrix4() },
+        tScene: { value: this.rt.texture },
+        tDepth: { value: depthTexture },
+        uRes: { value: new THREE.Vector2(2, 2) },
+        uAspect: { value: 1 },
+        uTime: { value: 0 },
+        uNear: { value: this.camera.near },
+        uFar: { value: this.camera.far },
+        uHurt: { value: 0 },
+        uFlash: { value: 0 },
+        uSlow: { value: 0 },
+        uLowHp: { value: 0 },
+        uLineSpacing: { value: 60 },
+        uPaper: { value: new THREE.Vector3(0.965, 0.955, 0.905) },
+        uInks: { value: INK_COLORS },
+        uInvProj: { value: new THREE.Matrix4() },
+        uInvView: { value: new THREE.Matrix4() },
       },
-      vertexShader: postVert, fragmentShader: postFrag, depthTest: false, depthWrite: false,
+      vertexShader: postVert,
+      fragmentShader: postFrag,
+      depthTest: false,
+      depthWrite: false,
     });
-    this.postScene = new THREE.Scene(); this.postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this.postScene = new THREE.Scene();
+    this.postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.post));
     this._clear = new THREE.Color(1, 0, 0);
     this._ld = new THREE.Vector3();
     this.resize();
-    window.addEventListener('resize', () => this.resize());
+    this.onResize = () => this.resize();
+    window.addEventListener('resize', this.onResize);
   }
   resize() {
-    const w = Math.max(2, window.innerWidth), h = Math.max(2, window.innerHeight);
-    this.renderer.setPixelRatio(this.pixelRatio); this.renderer.setSize(w, h, false);
-    const rw = Math.floor(w * this.pixelRatio), rh = Math.floor(h * this.pixelRatio);
+    const w = Math.max(2, window.innerWidth),
+      h = Math.max(2, window.innerHeight);
+    this.renderer.setPixelRatio(this.pixelRatio);
+    this.renderer.setSize(w, h, false);
+    const rw = Math.floor(w * this.pixelRatio),
+      rh = Math.floor(h * this.pixelRatio);
     this.rt.setSize(rw, rh);
-    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
-    const u = this.post.uniforms; u.uRes.value.set(rw, rh); u.uAspect.value = w / h; u.uLineSpacing.value = rh / 13.5;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    const u = this.post.uniforms;
+    u.uRes.value.set(rw, rh);
+    u.uAspect.value = w / h;
+    u.uLineSpacing.value = rh / 13.5;
   }
   render(time, fx = {}) {
     shared.uTime.value = time;
-    this.camera.updateMatrixWorld(); this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert();
+    this.camera.updateMatrixWorld();
+    this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert();
     shared.uLightDir.value.copy(LIGHT_WORLD).transformDirection(this.camera.matrixWorldInverse);
     const r = this.renderer;
-    r.setRenderTarget(this.rt); r.setClearColor(this._clear, 0); r.clear(true, true, false);
+    r.setRenderTarget(this.rt);
+    r.setClearColor(this._clear, 0);
+    r.clear(true, true, false);
     r.render(this.scene, this.camera);
     r.setRenderTarget(null);
-    const u = this.post.uniforms; u.uTime.value = time; u.uNear.value = this.camera.near; u.uFar.value = this.camera.far;
-    u.uInvProj.value.copy(this.camera.projectionMatrixInverse); u.uInvView.value.copy(this.camera.matrixWorld);
-    u.uHurt.value = fx.hurt || 0; u.uFlash.value = fx.flash || 0; u.uSlow.value = fx.slow || 0; u.uLowHp.value = fx.lowHp || 0;
+    const u = this.post.uniforms;
+    u.uTime.value = time;
+    u.uNear.value = this.camera.near;
+    u.uFar.value = this.camera.far;
+    u.uInvProj.value.copy(this.camera.projectionMatrixInverse);
+    u.uInvView.value.copy(this.camera.matrixWorld);
+    u.uHurt.value = fx.hurt || 0;
+    u.uFlash.value = fx.flash || 0;
+    u.uSlow.value = fx.slow || 0;
+    u.uLowHp.value = fx.lowHp || 0;
     r.render(this.postScene, this.postCam);
+  }
+  dispose() {
+    window.removeEventListener('resize', this.onResize);
+    this.rt.dispose();
+    this.postScene.traverse((object) => object.geometry?.dispose());
+    this.post.dispose();
+    this.renderer.dispose();
   }
 }

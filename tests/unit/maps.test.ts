@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import baseline from '../fixtures/maps-baseline.json';
-import { LEVELS } from '../../src/level.js';
+import { LEVELS } from '../../src/maps/index.js';
 import { levelFingerprint, seededRandom } from '../support/level-fingerprint';
 
 afterEach(() => vi.restoreAllMocks());

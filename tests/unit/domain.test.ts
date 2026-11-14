@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { knownMap, mapName } from '../../src/domain/maps';
-import { comboScore, formatClock, idlePolicy, rankScores, recordDeath } from '../../src/domain/match';
+import {
+  comboScore,
+  formatClock,
+  idlePolicy,
+  rankScores,
+  recordDeath,
+} from '../../src/domain/match';
 import { bossFor, enemyName, planWave } from '../../src/domain/waves';
 
 describe('game rules', () => {
@@ -40,13 +46,21 @@ describe('game rules', () => {
     const wave = planWave(1, () => 0);
     expect(wave.queue).toEqual(Array(7).fill('grunt'));
     expect(wave).toMatchObject({ maxAlive: 4, speed: 1, damage: 1.2, boss: false });
-    for (const [number, type] of [[5, 'boss'], [10, 'eraser'], [15, 'inkblot'], [20, 'boss']] as const) {
+    for (const [number, type] of [
+      [5, 'boss'],
+      [10, 'eraser'],
+      [15, 'inkblot'],
+      [20, 'boss'],
+    ] as const) {
       expect(bossFor(number)).toBe(type);
       expect(planWave(number, () => 0.99).queue[0]).toBe(type);
       expect(enemyName(type)).toMatch(/^THE /);
     }
     expect(planWave(4, () => 0.99).queue).toContain('flyer');
-    expect(planWave(6, () => 0.99)).toMatchObject({ modifier: 'SWARM · more of them, thinner', speed: 1.15 });
+    expect(planWave(6, () => 0.99)).toMatchObject({
+      modifier: 'SWARM · more of them, thinner',
+      speed: 1.15,
+    });
     expect(enemyName('grunt')).toBe('GRUNT');
     expect(() => planWave(0)).toThrow(RangeError);
     expect(() => planWave(1.5)).toThrow(RangeError);

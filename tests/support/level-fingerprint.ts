@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Mesh, Scene, Vector3 } from 'three';
-import { buildLevel } from '../../src/level.js';
-import { World } from '../../src/physics.js';
+import { buildLevel } from '../../src/maps/index.js';
+import { World } from '../../src/engine/physics.js';
 
 // Record output, not source text: extraction must preserve collision and procedural geometry.
 export function levelFingerprint(key: string, arena: boolean) {
@@ -18,10 +18,21 @@ export function levelFingerprint(key: string, arena: boolean) {
     hash.update(Buffer.from(positions.array.buffer));
     hash.update(JSON.stringify(object.matrixWorld.elements));
   });
-  hash.update(JSON.stringify(world.boxes.map(({ min, max, data }) => ({ min, max, data: {
-    noNav: data.noNav, noShoot: data.noShoot, noGrapple: data.noGrapple, tag: data.tag,
-    breakable: data.breakable?.id,
-  } }))));
+  hash.update(
+    JSON.stringify(
+      world.boxes.map(({ min, max, data }) => ({
+        min,
+        max,
+        data: {
+          noNav: data.noNav,
+          noShoot: data.noShoot,
+          noGrapple: data.noGrapple,
+          tag: data.tag,
+          breakable: data.breakable?.id,
+        },
+      })),
+    ),
+  );
   const result = {
     key: level.key,
     bounds: level.bounds,

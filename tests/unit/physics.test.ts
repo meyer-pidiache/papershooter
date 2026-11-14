@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { makeBody, SEE_THROUGH, World } from '../../src/physics.js';
+import { makeBody, SEE_THROUGH, World } from '../../src/engine/physics.js';
 
 const vector = (x = 0, y = 0, z = 0) => new Vector3(x, y, z);
 

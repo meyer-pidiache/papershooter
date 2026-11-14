@@ -30,10 +30,16 @@ export function createIceClient(config: NetworkConfig, options: Options = {}) {
   async function stun(): Promise<IceServer[]> {
     if (cachedStun !== null) return cachedStun;
     if (!stunRequest) {
-      stunRequest = request(config.iceConfigUrl).then((payload) => parseIceServers(payload.iceServers, 'stun'));
+      stunRequest = request(config.iceConfigUrl).then((payload) =>
+        parseIceServers(payload.iceServers, 'stun'),
+      );
     }
-    try { cachedStun = await stunRequest; return cachedStun; }
-    finally { stunRequest = null; }
+    try {
+      cachedStun = await stunRequest;
+      return cachedStun;
+    } finally {
+      stunRequest = null;
+    }
   }
 
   async function turn(): Promise<IceServer[]> {
@@ -44,14 +50,18 @@ export function createIceClient(config: NetworkConfig, options: Options = {}) {
         const servers = parseIceServers(payload.iceServers, 'turn');
         if (!servers.length) throw new TypeError('No TURN servers');
         const expiry = Number(payload.expiresAt);
-        if (!Number.isFinite(expiry) || expiry <= now()) throw new TypeError('Missing or expired TURN credentials');
+        if (!Number.isFinite(expiry) || expiry <= now())
+          throw new TypeError('Missing or expired TURN credentials');
         cachedTurn = servers;
         expiresAt = expiry;
         return servers;
       });
     }
-    try { return await turnRequest; }
-    finally { turnRequest = null; }
+    try {
+      return await turnRequest;
+    } finally {
+      turnRequest = null;
+    }
   }
 
   return {
@@ -59,7 +69,9 @@ export function createIceClient(config: NetworkConfig, options: Options = {}) {
       const results = await Promise.allSettled([stun(), turn()]);
       const iceServers = results.flatMap((result, index) => {
         if (result.status === 'fulfilled') return result.value;
-        warn(`${index === 0 ? 'STUN configuration' : 'TURN credentials'} unavailable; continuing with the available ICE servers.`);
+        warn(
+          `${index === 0 ? 'STUN configuration' : 'TURN credentials'} unavailable; continuing with the available ICE servers.`,
+        );
         return [];
       });
       return { ...config.peer, config: { iceServers } };

@@ -22,7 +22,11 @@ export function rankScores(scores: ReadonlyMap<string, Score>): Array<[string, S
 }
 
 /** Mutates the match's score table; a suicide never awards a kill. */
-export function recordDeath(scores: Map<string, Score>, victim: string, killer?: string | null): void {
+export function recordDeath(
+  scores: Map<string, Score>,
+  victim: string,
+  killer?: string | null,
+): void {
   const victimScore = scores.get(victim);
   if (victimScore) victimScore.deaths++;
   if (killer && killer !== victim) {

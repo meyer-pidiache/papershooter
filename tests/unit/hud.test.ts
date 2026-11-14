@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HUD } from '../../src/hud.js';
+import { HUD } from '../../src/presentation/hud.js';
 import { escapeHtml } from '../../src/presentation/html';
 
 beforeEach(() => vi.useFakeTimers());

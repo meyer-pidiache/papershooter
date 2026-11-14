@@ -22,12 +22,17 @@ export class Preferences {
       const legacy = this.storage?.getItem(`doodle_${key}`) ?? null;
       if (legacy != null) this.write(key, legacy);
       return legacy;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
   write(key: string, value: string | number | boolean): void {
-    try { this.storage?.setItem(`paper_${key}`, String(value)); }
-    catch { /* Gameplay remains usable when storage is unavailable or full. */ }
+    try {
+      this.storage?.setItem(`paper_${key}`, String(value));
+    } catch {
+      /* Gameplay remains usable when storage is unavailable or full. */
+    }
   }
 
   load(random: () => number = Math.random) {
@@ -46,6 +51,9 @@ export class Preferences {
 }
 
 export function browserPreferences(): Preferences {
-  try { return new Preferences(window.localStorage); }
-  catch { return new Preferences(null); }
+  try {
+    return new Preferences(window.localStorage);
+  } catch {
+    return new Preferences(null);
+  }
 }
