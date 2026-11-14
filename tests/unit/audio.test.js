@@ -37,8 +37,8 @@ describe('procedural audio', () => {
     audio.resume();
     expect(ctx.state).toBe('running');
     audio.setListener(new Vector3(), new Vector3(1, 0, 0));
-    const near = audio._out(new Vector3(1, 0, 0)).gain.value;
-    const far = audio._out(new Vector3(100, 0, 0)).gain.value;
+    const near = audio.synth._out(new Vector3(1, 0, 0)).gain.value;
+    const far = audio.synth._out(new Vector3(100, 0, 0)).gain.value;
     expect(far).toBeLessThan(near);
     const sounds = [
       'shot',
@@ -110,12 +110,13 @@ describe('procedural audio', () => {
     audio.kill(false);
     audio.smash(new Vector3(), true);
     audio.smash(new Vector3(), false);
-    audio.noise({ hp: 200, freqEnd: 40, at: 2 });
-    audio.tone({ freq: 440, freqEnd: 880, pos: new Vector3(2, 0, 0) });
+    audio.synth.noise({ hp: 200, freqEnd: 40, at: 2 });
+    audio.synth.tone({ freq: 440, freqEnd: 880, pos: new Vector3(2, 0, 0) });
     audio.reelLoop(true);
-    const reel = audio._reel;
+    const reel = ctx.nodes.length;
     audio.reelLoop(true);
-    expect(audio._reel).toBe(reel);
+    expect(ctx.nodes.length).toBe(reel);
+    expect(audio.reel.playing).toBe(true);
     audio.reelLoop(false);
     expect(
       ctx.parameters.every(
@@ -149,10 +150,10 @@ describe('procedural audio', () => {
       expect(audio.musicPlaying).toBe(true);
       for (let time = 0; time < duration; time += 0.5) {
         ctx.currentTime += 0.5;
-        audio._musicTick();
+        audio.music.tick();
       }
       ctx.currentTime += 10;
-      audio._musicTick();
+      audio.music.tick();
       vi.advanceTimersByTime(100);
       audio.musicOn(false);
       expect(audio.musicPlaying).toBe(false);
