@@ -53,6 +53,12 @@ application controllers. `createApplication` wires actions before starting its a
 schedulers. Its idempotent `dispose()` stops schedulers, releases listeners/connections/audio and
 disposes scene/rendering resources. Permanent page navigation and Vite teardown call it.
 
+`SceneResources` belongs to the application. Register constructed nodes with `track`; `release`
+retires their current subtree. Reparenting an existing tracked fragment transfers ownership without
+counting it twice. Shared geometry/materials survive until their last tracked mesh or explicit cache
+lease releases them. Renderer render targets and audio contexts retain their separate adapter
+lifetimes. See [ADR 0008](adr/0008-scene-resource-ownership.md).
+
 The loop keeps the original variable timestep, capped at 50 ms, hitstop and focus scaling. Input,
 simulation, death/respawn, idle/lobby updates and presentation have separate phases. Moving to a
 fixed timestep, rollback netcode or a different physics engine would change behavior and needs a

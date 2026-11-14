@@ -186,7 +186,7 @@ export class Player {
     this.clearNades();
   }
   clearNades() {
-    for (const n of this.nades) this.ctx.scene.remove(n.mesh);
+    for (const n of this.nades) this.ctx.resources.release(n.mesh);
     this.nades.length = 0;
   }
   get isBlocking() {
@@ -765,6 +765,7 @@ export class Player {
     g.add(cap);
     g.position.copy(pos);
     ctx.scene.add(g);
+    ctx.resources.track(g);
     this.nades.push({
       mesh: g,
       pos,
@@ -784,6 +785,7 @@ export class Player {
         const m = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), mat);
         m.visible = false;
         this.ctx.scene.add(m);
+        this.ctx.resources.track(m);
         dots.push(m);
       }
       const mark = new THREE.Mesh(
@@ -793,6 +795,7 @@ export class Player {
       mark.rotation.x = Math.PI / 2;
       mark.visible = false;
       this.ctx.scene.add(mark);
+      this.ctx.resources.track(mark);
       this._arc = { dots, mark };
     }
     const A = this._arc;
@@ -889,7 +892,7 @@ export class Player {
         });
       if (n.fuse <= 0) {
         this.explodeNade(n);
-        ctx.scene.remove(n.mesh);
+        ctx.resources.release(n.mesh);
         this.nades.splice(i, 1);
       }
     }

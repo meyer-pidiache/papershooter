@@ -12,12 +12,13 @@ import { Sfx } from '../presentation/audio.js';
 import { browserPreferences } from '../platform/preferences.js';
 import { comboScore, FFA_TIME } from '../domain/match.js';
 import { knownMap } from '../domain/maps.js';
-import { disposeObjects } from '../engine/resources.js';
+import { SceneResources } from '../engine/resources.js';
 
 /** Owns resources and shared match state; controllers receive explicit actions from composition. */
 /** @param {import('./contracts.js').ApplicationOptions} options */
 export function createRuntime(options) {
   const audio = options.audio ?? new Sfx();
+  const resources = new SceneResources();
   const canvas = options.canvas;
   const R = options.renderer ?? new InkRenderer(canvas);
   const world = new World();
@@ -38,8 +39,9 @@ export function createRuntime(options) {
   state.nav = new NavGrid(world, state.level.bounds, 1).build();
   const input = options.input ?? new Input(canvas);
   const hud = options.hud ?? new HUD(options.hudRoot);
-  const effects = new Effects(R.scene, world);
+  const effects = new Effects(R.scene, world, resources);
   const ctx = {
+    resources,
     scene: R.scene,
     camera: R.camera,
     world,
@@ -110,12 +112,13 @@ export function createRuntime(options) {
 
   function setLevel(key, arena, force = false) {
     if (!force && key === state.loadedKey && arena === state.arenaLoaded) return;
-    disposeObjects(state.level.meshes, R.scene);
+    for (const mesh of state.level.meshes) resources.release(mesh);
     state.level.animated.length = 0;
     world.clear();
     state.loadedKey = key;
     state.arenaLoaded = arena;
     state.level = buildLevel(R.scene, world, key, { arena });
+    for (const mesh of state.level.meshes) resources.track(mesh);
     state.nav = new NavGrid(world, state.level.bounds, 1).build();
     ctx.level = state.level;
     ctx.nav = state.nav;
@@ -133,7 +136,9 @@ export function createRuntime(options) {
     preferences.write('invert', settings.invert ? '1' : '0');
   }
   audio.setTune(state.mapKey === 'mexico' ? 'mexico' : 'district');
+  resources.track(R.scene);
   return {
+    resources,
     audio,
     canvas,
     R,

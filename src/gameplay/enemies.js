@@ -84,7 +84,7 @@ export class EnemyManager {
   clear() {
     for (const e of this.enemies) {
       this._removeLaser(e);
-      if (!e.rootDetached) this.ctx.scene.remove(e.root);
+      if (!e.rootDetached) this.ctx.resources.release(e.root);
     }
     this.enemies.length = 0;
     this.alive = 0;
@@ -172,6 +172,7 @@ export class EnemyManager {
     e.root.position.copy(pos);
     e.root.scale.setScalar(0.001);
     this.ctx.scene.add(e.root);
+    this.ctx.resources.track(e.root);
     this.enemies.push(e);
     this.alive++;
     if (this.onSpawn && !this.mirror) this.onSpawn(e);
@@ -484,7 +485,7 @@ export class EnemyManager {
       this.alive--;
       if (this.onKill) this.onKill(e, { source: 'blast', dir: _up.clone() }, true);
     }
-    this.ctx.scene.remove(e.root);
+    this.ctx.resources.release(e.root);
     e.rootDetached = true;
     e.deadT = 99;
   }
@@ -575,8 +576,9 @@ export class EnemyManager {
       const e = this.enemies[i];
       if (!e.alive && e.deadT > 9) {
         this._removeLaser(e);
-        if (!e.rootDetached) this.ctx.scene.remove(e.root);
+        if (!e.rootDetached) this.ctx.resources.release(e.root);
         this.enemies.splice(i, 1);
+        this.byId.delete(e.id);
       }
     }
   }
@@ -671,9 +673,10 @@ export class EnemyManager {
       const e = this.enemies[i];
       if (!e.alive && e.deadT > 9) {
         this._removeLaser(e);
-        if (!e.rootDetached) this.ctx.scene.remove(e.root);
+        if (!e.rootDetached) this.ctx.resources.release(e.root);
         this.byId.delete(e.id);
         this.enemies.splice(i, 1);
+        this.byId.delete(e.id);
       }
     }
   }
@@ -1435,6 +1438,7 @@ export class EnemyManager {
       );
       e.laser.frustumCulled = false;
       this.ctx.scene.add(e.laser);
+      this.ctx.resources.track(e.laser);
     }
     e.laser.visible = true;
     // stop the beam short of where it is pointing, otherwise a shot aimed at your face
@@ -1453,8 +1457,7 @@ export class EnemyManager {
   }
   _removeLaser(e) {
     if (e.laser) {
-      this.ctx.scene.remove(e.laser);
-      e.laser.geometry.dispose();
+      this.ctx.resources.release(e.laser);
       e.laser = null;
     }
   }

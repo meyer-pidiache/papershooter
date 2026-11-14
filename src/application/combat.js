@@ -197,7 +197,7 @@ export function createCombat(runtime, actions = {}) {
         ? dir.clone().normalize()
         : new THREE.Vector3(rand(-1, 1), 1, rand(-1, 1)).normalize();
     if (quiet) {
-      R.scene.remove(g);
+      runtime.resources.release(g);
       return;
     }
     g.updateMatrixWorld(true);
@@ -216,7 +216,7 @@ export function createCombat(runtime, actions = {}) {
         { radius: 0.14, blood: false, life: rand(6, 9) },
       );
     }
-    R.scene.remove(g);
+    runtime.resources.release(g);
     const up = new THREE.Vector3(0, 1, 0);
     if (br.kind === 'pinata') {
       for (const ink of [INK.PINK, INK.ORANGE, INK.GREEN])

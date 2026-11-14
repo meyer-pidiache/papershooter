@@ -1,5 +1,4 @@
 import { createRuntime } from './runtime.js';
-import { disposeObjects } from '../engine/resources.js';
 import { createPickups } from './pickups.js';
 import { createCombat } from './combat.js';
 import { createFocus } from './focus.js';
@@ -131,12 +130,15 @@ export function createApplication(options) {
     runtime.net.leave();
     runtime.input.dispose?.();
     runtime.player.clearNades();
+    pickups.dispose();
     runtime.enemies.clear();
-    runtime.effects.clear();
+    runtime.effects.dispose();
     for (const remote of runtime.remote.values()) remote.dispose();
     runtime.remote.clear();
     audio.dispose();
-    disposeObjects([...runtime.R.scene.children], runtime.R.scene);
+    runtime.resources.track(runtime.R.scene);
+    runtime.resources.dispose();
+    runtime.R.scene.clear();
     runtime.R.dispose?.();
     if (window.__game === debug) delete window.__game;
   }

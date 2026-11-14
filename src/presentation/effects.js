@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { makeInkMaterial, INK } from './renderer.js';
 import { rand, randInt, clamp, lerp, TAU } from '../engine/math.js';
 import { SEE_THROUGH } from '../engine/physics.js';
+import { SceneResources } from '../engine/resources.js';
 
 const _v = new THREE.Vector3(),
   _v2 = new THREE.Vector3(),
@@ -61,7 +62,8 @@ function splatGeometry(seed) {
 }
 
 export class Effects {
-  constructor(scene, world) {
+  constructor(scene, world, resources = new SceneResources()) {
+    this.resources = resources;
     this.scene = scene;
     this.world = world;
     this.drops = this._pool(new THREE.IcosahedronGeometry(0.5, 1), 700);
@@ -87,6 +89,7 @@ export class Effects {
     mesh.frustumCulled = false;
     mesh.count = 0;
     this.scene.add(mesh);
+    this.resources.track(mesh);
     return { mesh, max, next: 0, used: 0 };
   }
   _write(pool, i, pos, quat, scale, ink, fill) {
@@ -107,13 +110,22 @@ export class Effects {
   clear() {
     this.particles.length = 0;
     this.growing.length = 0;
-    for (const d of this.debrisList) this.scene.remove(d.mesh);
+    for (const d of this.debrisList) this.resources.release(d.mesh);
     this.debrisList.length = 0;
+    this.gibsAlive = 0;
     for (const p of [this.drops, this.strokes, this.holes, ...this.splats]) {
       p.next = 0;
       p.used = 0;
       p.mesh.count = 0;
     }
+  }
+
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.clear();
+    for (const pool of [this.drops, this.strokes, this.holes, ...this.splats])
+      this.resources.release(pool.mesh);
   }
 
   // ---------- decals ----------
@@ -511,6 +523,7 @@ export class Effects {
   debris(mesh, pos, vel, angVel, o = {}) {
     mesh.position.copy(pos);
     this.scene.add(mesh);
+    this.resources.track(mesh);
     const d = {
       mesh,
       vel: vel.clone(),
@@ -527,7 +540,7 @@ export class Effects {
     if (d.blood) this.gibsAlive++;
     if (this.debrisList.length > 70) {
       const old = this.debrisList.shift();
-      this.scene.remove(old.mesh);
+      this.resources.release(old.mesh);
       if (old.blood) this.gibsAlive--;
     }
     return d;
@@ -657,7 +670,7 @@ export class Effects {
       d.life -= dt;
       if (d.life < 0.6) m.scale.setScalar(Math.max(0.001, d.life / 0.6) * d.baseScale);
       if (d.life <= 0) {
-        this.scene.remove(m);
+        this.resources.release(m);
         if (d.blood) this.gibsAlive--;
         ds.splice(i, 1);
       }

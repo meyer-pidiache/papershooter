@@ -18,7 +18,6 @@ export function createControls(runtime, actions = {}) {
     setLevel,
     enemies,
     effects,
-    R,
     player,
     online,
     hud,
@@ -59,7 +58,7 @@ export function createControls(runtime, actions = {}) {
       setLevel(runtime.state.loadedKey, runtime.state.arenaLoaded, true);
     enemies.clear();
     effects.clear();
-    for (const p of runtime.state.pickups) R.scene.remove(p.mesh);
+    for (const p of runtime.state.pickups) runtime.resources.release(p.mesh);
     runtime.state.pickups.length = 0;
     runtime.state.pickupClock = 0;
     player.maxHp = online() ? 110 : 120;

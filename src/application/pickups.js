@@ -13,6 +13,7 @@ export function createPickups(runtime, actions = {}) {
     cap: makeInkMaterial({ ink: INK.BLACK }),
     shell: makeInkMaterial({ ink: INK.ORANGE }),
   };
+  const releaseMaterials = runtime.resources.retain(Object.values(pmat));
   function makePickup(kind) {
     const g = new THREE.Group();
     if (kind === 'ammo') {
@@ -47,13 +48,14 @@ export function createPickups(runtime, actions = {}) {
     m.position.copy(pos);
     m.position.y += 0.6;
     R.scene.add(m);
+    runtime.resources.track(m);
     const p = { id: id ?? pickupId++, kind, mesh: m, base: m.position.y, t: rand(0, 6), life: 45 };
     runtime.state.pickups.push(p);
     if (net.isHost) net.send('pickup', { id: p.id, kind, pos: pos.toArray() });
     return p;
   }
   function removePickup(p) {
-    R.scene.remove(p.mesh);
+    runtime.resources.release(p.mesh);
     const i = runtime.state.pickups.indexOf(p);
     if (i >= 0) runtime.state.pickups.splice(i, 1);
   }
@@ -102,7 +104,12 @@ export function createPickups(runtime, actions = {}) {
     }
   }
 
+  function dispose() {
+    for (const pickup of [...runtime.state.pickups]) removePickup(pickup);
+    releaseMaterials();
+  }
   return {
+    dispose,
     makePickup,
     spawnPickup,
     removePickup,

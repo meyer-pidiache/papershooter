@@ -106,6 +106,7 @@ export class RemotePlayer {
     this.score = 0;
     this.mat = makeInkMaterial({ ink, shadeScale: 0, shadeBias: 1 });
     this.solid = makeInkMaterial({ ink: INK.BLACK, fill: true, side: THREE.DoubleSide });
+    this.releaseMaterials = ctx.resources.retain([this.mat, this.solid]);
     this.T = {
       weapon: 'rifle',
       scale: 1.0,
@@ -126,12 +127,14 @@ export class RemotePlayer {
     );
     this.rope.visible = false;
     ctx.scene.add(this.rope);
+    ctx.resources.track(this.rope);
     this.hook = new THREE.Mesh(
       new THREE.SphereGeometry(0.12, 6, 5),
       makeInkMaterial({ ink: INK.BLACK, fill: true }),
     );
     this.hook.visible = false;
     ctx.scene.add(this.hook);
+    ctx.resources.track(this.hook);
   }
   _buildModel() {
     const model = buildHumanoid(this.mat, this.solid, this.T);
@@ -152,6 +155,7 @@ export class RemotePlayer {
     );
     this.tagG.add(flag);
     this.corpse = false;
+    this.ctx.resources.track(this.root);
   }
   // knocked flat with some physics: the whole figure tumbles away as debris (bits come off on a
   // big hit), and a fresh figure is drawn when the player comes back
@@ -236,8 +240,9 @@ export class RemotePlayer {
     if (i === this.weaponIndex && this.J.gun.children.length) return;
     this.weaponIndex = i;
     const gun = this.J.gun;
-    while (gun.children.length) gun.remove(gun.children[0]);
+    while (gun.children.length) this.ctx.resources.release(gun.children[0]);
     buildWeaponProp(gun, this.mat, this.solid, { weapon: WEAPON_KINDS[i] || 'rifle' });
+    this.ctx.resources.track(gun);
   }
   push(snap, t) {
     if (!snap) return;
@@ -437,8 +442,9 @@ export class RemotePlayer {
         : 0);
   }
   dispose() {
-    if (this.root) this.ctx.scene.remove(this.root);
-    this.ctx.scene.remove(this.rope);
-    this.ctx.scene.remove(this.hook);
+    if (this.root) this.ctx.resources.release(this.root);
+    this.ctx.resources.release(this.rope);
+    this.ctx.resources.release(this.hook);
+    this.releaseMaterials();
   }
 }
