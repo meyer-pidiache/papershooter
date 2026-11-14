@@ -49,8 +49,9 @@ that composition; completing its consumer contracts is part of review finding R5
 
 ## Temporary coordinator exception
 
-At this checkpoint, `player.js` is 428 physical / 415 code lines and its constructor is 118 code
-lines. Those exceed the normal review signals. Its remaining role is composition, phase ordering
+At checkpoint `c9aed64`, `player.js` was 428 physical / 415 code lines. Its explicit equipment
+and grenade disposal command now brings it to 434 physical / 421 code lines; its constructor is
+118 code lines. The added disposal method delegates lifetime cleanup and adds no gameplay rule. Those exceed the normal review signals. Its remaining role is composition, phase ordering
 and the existing actor facade; the calculations above are independently owned. There are no
 remaining function-complexity findings in this coordinator or its extracted player components.
 

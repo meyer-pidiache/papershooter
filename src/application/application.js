@@ -129,7 +129,7 @@ export function createApplication(options) {
     controls.dispose();
     runtime.net.leave();
     runtime.input.dispose?.();
-    runtime.player.clearNades();
+    runtime.player.dispose();
     pickups.dispose();
     runtime.enemies.clear();
     runtime.effects.dispose();

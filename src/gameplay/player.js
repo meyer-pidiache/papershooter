@@ -140,6 +140,12 @@ export class Player {
       ),
     );
   }
+  dispose() {
+    this.grenadeSystem.clear();
+    this.grenadeSystem.onThrow = null;
+    this.grenadeSystem.onExplosion = null;
+    this.equipment.dispose();
+  }
   reset(pos) {
     this.grenadeSystem.cancelCharge();
     const b = this.body;

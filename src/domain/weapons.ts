@@ -1,5 +1,41 @@
 import { INK } from '../shared/ink.js';
 
+export type GunKind = 'rifle' | 'shotgun' | 'sniper' | 'revolver';
+export type Falloff = [number, number, number];
+export interface GunDefinition {
+  name: string;
+  hint: string;
+  kind: GunKind;
+  scope?: boolean;
+  magSize: number;
+  reserve: number;
+  maxReserve: number;
+  interval: number;
+  damage: number;
+  headMul: number;
+  pellets: number;
+  spread: number;
+  adsSpread: number;
+  spreadKick: number;
+  spreadMax: number;
+  moveSpread: number;
+  adsFov: number;
+  sight: [number, number, number, number];
+  camKick: [number, number];
+  modelKick: [number, number, number, number, number, number];
+  fovKick: number;
+  reloadDur: number;
+  reloadType: 'mag' | 'shells' | 'cylinder';
+  auto: boolean;
+  cycleDur?: number;
+  falloff: Falloff | null;
+  tracer: number;
+  flashScale: number;
+  sound: 'shot' | 'shotgunFire' | 'sniperFire' | 'revolver';
+  shell: [number, number] | null;
+  pvp: [number, number, Falloff | null];
+}
+
 export const GUNS = {
   rifle: {
     name: 'RIFLE',
@@ -128,4 +164,4 @@ export const GUNS = {
     moveSpread: 0.0015,
     pvp: [52, 2.9, [9, 34, 0.42]],
   },
-};
+} satisfies Record<GunKind, GunDefinition>;

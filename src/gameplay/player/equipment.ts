@@ -15,6 +15,7 @@ export interface EquippableWeapon {
   startSlash?(frame: WeaponFrame): void;
   resetAmmo?(): void;
   addAmmoFraction?(fraction: number): void;
+  dispose?(): void;
 }
 export interface EquipmentInput {
   down(action: string): boolean;
@@ -51,6 +52,9 @@ export class Equipment {
     this.index = index;
     this.current.equip();
     this.feedback.selected(this.current, silent);
+  }
+  dispose() {
+    for (const weapon of this.weapons) weapon.dispose?.();
   }
   reset() {
     for (const weapon of this.weapons) weapon.resetAmmo?.();

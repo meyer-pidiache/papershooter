@@ -29,3 +29,8 @@ export interface WeaponPose {
   landDip: number;
   alive: boolean;
 }
+
+export interface PumpFrame {
+  progress: number;
+  finished: boolean;
+}

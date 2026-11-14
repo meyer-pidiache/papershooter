@@ -55,6 +55,32 @@ describe('weapons and multiplayer models', () => {
     },
   );
 
+  it('automatically reloads an empty magazine after its owned delay', () => {
+    vi.useFakeTimers();
+    fixture = applicationFixture();
+    fixture.app.controls.begin();
+    const gun = fixture.player.weapon;
+    gun.mag = 1;
+    gun.fire(fixture.player._weaponState(false, false, 0));
+    vi.advanceTimersByTime(249);
+    expect(gun.reloading).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(gun.reloading).toBe(true);
+  });
+  it('cancels pending automatic reload when the application is disposed', () => {
+    vi.useFakeTimers();
+    fixture = applicationFixture();
+    fixture.app.controls.begin();
+    const gun = fixture.player.weapon;
+    gun.mag = 1;
+    gun.fire(fixture.player._weaponState(false, false, 0));
+    const reload = vi.spyOn(gun, 'startReload');
+    fixture.app.dispose();
+    vi.advanceTimersByTime(300);
+    expect(reload).not.toHaveBeenCalled();
+    expect(gun.reloading).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it('slashes, blocks and parries with the katana, and detonates thrown grenades', () => {
     vi.useFakeTimers();
     fixture = applicationFixture();
