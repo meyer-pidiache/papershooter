@@ -68,5 +68,6 @@ describe('independent melee timing', () => {
     expect(state.wantsFire({ ...frame, fire: true })).toBe(true);
     expect(state.wantsFire({ ...frame, fire: true, blockFire: true })).toBe(false);
     expect(state.wantsMelee({ ...frame, meleePressed: true })).toBe(true);
+    expect(state.wantsMelee({ ...frame, meleePressed: true, blockFire: true })).toBe(false);
   });
 });

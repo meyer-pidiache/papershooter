@@ -49,6 +49,6 @@ export class MeleeMechanics {
     );
   }
   wantsMelee(frame: WeaponFrame) {
-    return frame.meleePressed && this.slashTime <= 0 && this.cooldown <= 0;
+    return frame.meleePressed && this.slashTime <= 0 && this.cooldown <= 0 && !frame.blockFire;
   }
 }

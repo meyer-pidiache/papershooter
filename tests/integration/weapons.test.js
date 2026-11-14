@@ -81,6 +81,19 @@ describe('weapons and multiplayer models', () => {
     expect(gun.reloading).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
   });
+  it('does not start a melee attack from input after the local player dies', () => {
+    vi.useFakeTimers();
+    fixture = applicationFixture();
+    fixture.app.controls.begin();
+    fixture.player.switchTo(3);
+    const slash = vi.spyOn(fixture.player.weapon, 'startSlash');
+    fixture.player.die();
+    fixture.input.keys.melee = true;
+    fixture.input.update(0.02);
+    fixture.player.update(0.02);
+    expect(fixture.player.alive).toBe(false);
+    expect(slash).not.toHaveBeenCalled();
+  });
   it('slashes, blocks and parries with the katana, and detonates thrown grenades', () => {
     vi.useFakeTimers();
     fixture = applicationFixture();
