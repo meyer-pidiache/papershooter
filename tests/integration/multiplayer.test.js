@@ -41,12 +41,26 @@ describe('complete multiplayer sessions through an in-memory signaling boundary'
     await flushMessages();
     expect(guest.game).toMatchObject({ mode: 'ffa', state: 'play' });
     expect(guest.state.level.key).toBe('mexico');
+    host.player.shieldT = 0;
+    guest.player.shieldT = 0;
+    const hpBeforeInvalid = [host.player.hp, guest.player.hp];
+    const guestConnection = guest.net.conns.get(host.net.id);
+    for (const d of [null, { amount: -25 }, { amount: NaN }, { amount: 25, from: [0, 1] }]) {
+      guestConnection.send({ t: 'pdmg', d });
+      guestConnection.send({ t: 'pdmg', d, to: host.net.id, relay: true });
+    }
+    await flushMessages();
+    expect([host.player.hp, guest.player.hp]).toEqual(hpBeforeInvalid);
     host.frame(0.016, 3);
     guest.frame(0.016, 3);
     await flushMessages();
     host.app.multiplayer.netUpdate(0.016);
     guest.app.multiplayer.netUpdate(0.016);
     expect(host.remote.get(guest.net.id).snapB).not.toBeNull();
+    const previousSnapshot = host.remote.get(guest.net.id).snapB;
+    guestConnection.send({ t: 'ps', d: [NaN], relay: true });
+    await flushMessages();
+    expect(host.remote.get(guest.net.id).snapB).toBe(previousSnapshot);
     const remote = host.remote.get(guest.net.id);
     guest.player.shieldT = 0;
     const hp = guest.player.hp;

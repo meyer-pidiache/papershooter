@@ -3,6 +3,7 @@ import { networkConfig } from './config.js';
 import { createIceClient } from './ice-client.js';
 import { isWireMessage, lobbyCode, lobbyCount } from './protocol.js';
 import { MAX_PLAYERS } from '../domain/match.js';
+import { isGamePayload } from './game-messages.js';
 
 // Peer-to-peer networking over WebRTC, using the public PeerJS signalling service.
 // The host player's browser is authoritative. A small same-origin endpoint obtains temporary
@@ -36,8 +37,10 @@ export class Net {
     PeerClass = Peer,
     options = () => ice.peerOptions(),
     namespace = defaults.namespace,
+    validatePayload = isGamePayload,
   } = {}) {
     this.PeerClass = PeerClass;
+    this.validatePayload = validatePayload;
     this.generation = 0;
     this.options = options;
     this.prefix = namespace;
@@ -132,8 +135,11 @@ export class Net {
       if (this.onDisconnect) this.onDisconnect();
     }
   }
+  _validMessage(msg) {
+    return isWireMessage(msg) && this.validatePayload(msg.t, msg.d);
+  }
   _route(msg, from) {
-    if (!isWireMessage(msg)) return;
+    if (!this._validMessage(msg)) return;
     const sender = this.isHost ? from : msg.from || from;
     // clients can address each other; the host forwards those
     if (this.isHost && msg.to && msg.to !== this.id) {
@@ -256,7 +262,7 @@ export class Net {
       if (conn.metadata && conn.metadata.probe) {
         conn.send({ t: 'welcome', d: welcome, from: this.id });
         const onData = (msg) => {
-          if (msg && msg.t === 'stay') {
+          if (this._validMessage(msg) && msg.t === 'stay') {
             conn.off('data', onData);
             seat();
           }
@@ -388,7 +394,7 @@ export class Net {
         const a = { conn, hostId, done: false };
         attempts.push(a);
         conn.on('data', (msg) => {
-          if (!msg || a.done) return;
+          if (!this._validMessage(msg) || a.done) return;
           if (msg.t === 'welcome') {
             a.done = true;
             pending--;
@@ -472,7 +478,7 @@ export class Net {
         const a = { conn, hostId, done: false };
         attempts.push(a);
         conn.on('data', (msg) => {
-          if (!msg || a.done) return;
+          if (!this._validMessage(msg) || a.done) return;
           if (msg.t === 'welcome' || msg.t === 'refused') {
             a.done = true;
             pending--;
@@ -562,7 +568,7 @@ export class Net {
         const a = { conn, hostId, done: false };
         attempts.push(a);
         conn.on('data', (msg) => {
-          if (!msg || a.done) return;
+          if (!this._validMessage(msg) || a.done) return;
           if (msg.t === 'welcome') {
             a.done = true;
             finish(null, { hostId, conn, welcome: msg.d });
@@ -607,7 +613,7 @@ export class Net {
       };
       this.peer.on('error', onErr);
       conn.on('data', (msg) => {
-        if (!msg) return;
+        if (!this._validMessage(msg)) return;
         if (msg.t === 'welcome') finish(null, { conn, welcome: msg.d });
         else if (msg.t === 'refused')
           finish(new Error((msg.d && msg.d.reason) || 'the lobby turned you away'));

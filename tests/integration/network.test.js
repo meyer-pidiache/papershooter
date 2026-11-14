@@ -13,7 +13,13 @@ afterEach(() => {
 function setup() {
   const network = peerNetwork();
   const client = () => {
-    const net = new Net({ PeerClass: network.Peer, options: async () => ({}), namespace: 'test-' });
+    // Isolate generic routing behavior from the gameplay validators tested through composed sessions.
+    const net = new Net({
+      PeerClass: network.Peer,
+      options: async () => ({}),
+      namespace: 'test-',
+      validatePayload: () => true,
+    });
     clients.push(net);
     return net;
   };
@@ -21,6 +27,33 @@ function setup() {
 }
 
 describe('PeerJS lobby transport', () => {
+  it('drops malformed payloads before dispatch or forwarding to another peer', async () => {
+    const { Peer } = setup();
+    const make = () => {
+      const net = new Net({ PeerClass: Peer, options: async () => ({}), namespace: 'validated-' });
+      clients.push(net);
+      return net;
+    };
+    const host = make(),
+      a = make(),
+      b = make();
+    await host.host({ code: 'ABCDE' });
+    await a.join('ABCDE');
+    await b.join('ABCDE');
+    const local = vi.fn(),
+      forwarded = vi.fn();
+    host.on('pdmg', local);
+    b.on('pdmg', forwarded);
+    const connection = a.conns.get(host.id);
+    for (const d of [null, { amount: -25 }, { amount: 1, from: [0, Infinity, 0] }])
+      connection.send({ t: 'pdmg', d, to: b.id, relay: true });
+    await flushMessages();
+    expect(local).not.toHaveBeenCalled();
+    expect(forwarded).not.toHaveBeenCalled();
+    a.sendTo(b.id, 'pdmg', { amount: 25 });
+    await flushMessages();
+    expect(forwarded).toHaveBeenCalledWith({ amount: 25 }, a.id);
+  });
   it('accepts canonical host authority when a late join targets its reclaimed alias', async () => {
     vi.useFakeTimers();
     const { client } = setup();
