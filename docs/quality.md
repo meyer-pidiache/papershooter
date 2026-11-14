@@ -17,16 +17,16 @@ Branch coverage is reported separately and still has room to improve in combat, 
 failure paths. Do not describe line coverage as branch coverage or lower Sonar's gate to hide a
 missing report. Sonar's own new-code/condition calculations can differ from the local total.
 
-Local whole-product measurement at checkpoint `c9aed64` on 2026-11-14, before subsequent weapon
-extraction (later CI/generated reports supersede these snapshot values):
+Local whole-product measurement after `09cd612` on 2026-11-14 with the scoped integration deadline
+below (later CI/generated reports supersede these snapshot values):
 
 | Metric                      | Result                                          |
 | --------------------------- | ----------------------------------------------- |
-| Unit/integration tests      | 163 passing, including architecture regressions |
-| Statements                  | 87.43%                                          |
-| Lines                       | 88.89%                                          |
-| Functions                   | 88.97%                                          |
-| Branches                    | 76.65%                                          |
+| Unit/integration tests      | 193 passing, including architecture regressions |
+| Statements                  | 87.64%                                          |
+| Lines                       | 89.11%                                          |
+| Functions                   | 89.36%                                          |
+| Branches                    | 77.36%                                          |
 | Production dependency audit | 0 known advisories at the time of inspection    |
 
 The generated report and latest CI run are authoritative. Test seeds are fixed so procedural
@@ -56,6 +56,12 @@ Recording adapters replace WebGL/audio hardware and external signaling in unit t
 real pass/uniform/envelope/controller behavior. They do not prove shader appearance, audio quality,
 GPU performance or NAT traversal. Chromium smoke tests run against `dist/` and exercise the actual
 browser renderer/menu/game code. Browser tests are not silently added to the unit coverage total.
+
+The composed map/snapshot/damage multiplayer scenario has a local 10-second test deadline because
+it builds two complete applications and repeatedly rebuilds their real maps. Instrumented CI
+execution exceeded Vitest's default 5 seconds. Its fake clock/message flushing remains bounded;
+other tests retain their default deadline. This is a test execution budget, not a coverage change
+or a claim about real-browser frame performance.
 
 ## Transform baseline precision
 
