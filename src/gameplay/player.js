@@ -1,3 +1,4 @@
+import { Equipment } from './player/equipment.js';
 import { FirstPersonView } from '../presentation/first-person.js';
 import { Locomotion } from './player/locomotion.js';
 import { Grapple } from './player/grapple.js';
@@ -52,23 +53,37 @@ export class Player {
     this.rig = new THREE.Group();
     this.camera.add(this.rig);
     ctx.scene.add(this.camera);
-    this.weapons = [new Rifle(ctx), new Shotgun(ctx), new Sniper(ctx), new Katana(ctx)];
-    this.katanaIndex = 3;
-    for (const w of this.weapons) {
-      this.rig.add(w.root);
-      if (w.isGun) w.startReserve = w.reserve;
-    }
-    this.weaponIndex = 0;
-    this.weapon = this.weapons[0];
-    this.weapon.equip();
-    this.returnT = 0;
-    this.prevWeaponIndex = 0;
+    const weapons = [new Rifle(ctx), new Shotgun(ctx), new Sniper(ctx), new Katana(ctx)];
+    for (const weapon of weapons) this.rig.add(weapon.root);
+    this.equipment = new Equipment(weapons, {
+      selected: (weapon, silent) => {
+        if (!silent) ctx.audio.switchWeapon();
+        ctx.hud.setWeapon(weapon.name, weapon.hint);
+        ctx.hud.setCrosshairMode(weapon.kind === 'katana' ? 'katana' : '');
+      },
+      sights: (ads, scope) => {
+        ctx.hud.setAds(ads);
+        ctx.hud.setScope(scope);
+      },
+    });
+    this.equipmentPose = {
+      aiming: false,
+      sprinting: false,
+      grounded: false,
+      speed: 0,
+      sliding: false,
+      lookDelta: ctx.input.look,
+      strafe: 0,
+      bobPhase: 0,
+      bobAmt: 0,
+      landDip: 0,
+      alive: true,
+    };
     this.blockCd = 0;
 
     this.isLocal = true;
     this.team = 0;
     this.name = 'you';
-    this.firing = false;
     this.grenadePose = {
       eye: this.eye,
       right: this.right,
@@ -213,14 +228,7 @@ export class Player {
     this.view.reset();
     this.locomotion.reset();
     this.grappleSystem.reset();
-    for (const w of this.weapons)
-      if (w.isGun) {
-        w.mag = w.magSize;
-        w.reserve = w.startReserve;
-        w.reloading = false;
-        w.pumpT = 0;
-      }
-    this.switchTo(0, true);
+    this.equipment.reset();
     this.rig.visible = true;
     this.grenadeSystem.reset();
   }
@@ -363,20 +371,26 @@ export class Player {
     this.ctx.audio.dash();
     this.kickFov(3);
   }
-  switchTo(i, silent = false) {
-    if (i < 0 || i >= this.weapons.length) return;
-    if (i === this.weaponIndex && !silent) return;
-    if (this.weapon.kind !== 'katana') this.prevWeaponIndex = this.weaponIndex;
-    this.weapon.unequip();
-    this.weaponIndex = i;
-    this.weapon = this.weapons[i];
-    this.weapon.equip();
-    if (!silent) this.ctx.audio.switchWeapon();
-    this.ctx.hud.setWeapon(this.weapon.name, this.weapon.hint);
-    this.ctx.hud.setCrosshairMode(this.weapon.kind === 'katana' ? 'katana' : '');
+  get weapons() {
+    return this.equipment.weapons;
   }
-  addAmmoAll(frac = 0.5) {
-    for (const w of this.weapons) if (w.isGun) w.addAmmo(Math.round(w.maxReserve * frac));
+  get weapon() {
+    return this.equipment.current;
+  }
+  get weaponIndex() {
+    return this.equipment.index;
+  }
+  get katanaIndex() {
+    return this.equipment.meleeIndex;
+  }
+  get firing() {
+    return this.equipment.firing;
+  }
+  switchTo(index, silent = false) {
+    this.equipment.switchTo(index, silent);
+  }
+  addAmmoAll(fraction = 0.5) {
+    this.equipment.addAmmo(fraction);
   }
   takeDamage(amount, fromPos) {
     if (!this.alive) return;
@@ -533,56 +547,25 @@ export class Player {
     return hs2;
   }
 
-  _updateWeaponInput(dt, sprinting, aiming, hs2) {
-    const ctx = this.ctx,
-      inp = ctx.input;
-
-    for (let i = 0; i < 5; i++)
-      if (inp.pressed('slot' + (i + 1))) this.switchTo(Math.min(i, this.weapons.length - 1));
-    if (inp.pressed('nextWeapon')) this.switchTo((this.weaponIndex + 1) % this.weapons.length);
-    if (inp.pressed('prevWeapon'))
-      this.switchTo((this.weaponIndex + this.weapons.length - 1) % this.weapons.length);
-    const st = this._weaponState(sprinting, aiming, hs2);
-    if (inp.pressed('melee') && this.weapon.kind !== 'katana') {
-      this.switchTo(this.katanaIndex);
-      this.returnT = 0.85;
-      this.weapons[this.katanaIndex].startSlash(st);
-      st.meleePressed = false;
-    }
-    if (this.returnT > 0) {
-      if (this.weapon.kind === 'katana' && (st.firePressed || st.aim || st.meleePressed))
-        this.returnT = 0;
-      else {
-        this.returnT -= dt;
-        if (this.returnT <= 0) this.switchTo(this.prevWeaponIndex);
-      }
-    }
-    this.firing = st.fire && this.weapon.isGun;
-    this.weapon.animate(dt, st);
-    ctx.hud.setAds(this.weapon.isGun && this.weapon.aimAmt > 0.55);
-    ctx.hud.setScope(!!this.weapon.scope && this.weapon.aimAmt > 0.62);
+  _updateWeaponInput(dt, sprinting, aiming, speed) {
+    this.equipment.update(dt, this.ctx.input, this._equipmentState(sprinting, aiming, speed));
   }
-
-  _weaponState(sprinting, aiming, hs) {
-    const inp = this.ctx.input,
-      b = this.body;
-    return {
-      fire: inp.down('fire'),
-      firePressed: inp.pressed('fire'),
-      aim: aiming || (inp.down('aim') && this.weapon.kind === 'katana'),
-      reloadPressed: inp.pressed('reload'),
-      meleePressed: inp.pressed('melee') && this.weapon.kind === 'katana',
-      sprinting,
-      grounded: b.onGround,
-      speed: hs,
-      sliding: this.sliding,
-      lookDelta: inp.look,
-      strafe: this._mv.x,
-      bobPhase: this.view.bobPhase,
-      bobAmt: this.view.bobAmt,
-      landDip: clamp(-this.view.landDipValue * 0.08, -0.5, 0.5),
-      slideTilt: this.sliding ? 1 : 0,
-      blockFire: !this.alive,
-    };
+  _weaponState(sprinting, aiming, speed) {
+    return this.equipment.frame(this.ctx.input, this._equipmentState(sprinting, aiming, speed));
+  }
+  _equipmentState(sprinting, aiming, speed) {
+    const state = this.equipmentPose;
+    state.aiming = aiming;
+    state.sprinting = sprinting;
+    state.grounded = this.body.onGround;
+    state.speed = speed;
+    state.sliding = this.sliding;
+    state.lookDelta = this.ctx.input.look;
+    state.strafe = this._mv.x;
+    state.bobPhase = this.view.bobPhase;
+    state.bobAmt = this.view.bobAmt;
+    state.landDip = clamp(-this.view.landDipValue * 0.08, -0.5, 0.5);
+    state.alive = this.alive;
+    return state;
   }
 }

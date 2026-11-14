@@ -87,6 +87,7 @@ export class Gun extends ViewModel {
     Object.assign(this, GUNS[type]);
     this.isGun = true;
     this.mag = this.magSize;
+    this.startReserve = this.reserve;
     this.fireT = 0;
     this.reloading = false;
     this.reloadT = 0;
@@ -106,6 +107,15 @@ export class Gun extends ViewModel {
   }
   addAmmo(n) {
     this.reserve = Math.min(this.reserve + n, this.maxReserve);
+  }
+  resetAmmo() {
+    this.mag = this.magSize;
+    this.reserve = this.startReserve;
+    this.reloading = false;
+    this.pumpT = 0;
+  }
+  addAmmoFraction(fraction) {
+    this.addAmmo(Math.round(this.maxReserve * fraction));
   }
   startReload() {
     if (this.reloading || this.mag >= this.magSize || this.reserve <= 0) return;
